@@ -71,10 +71,10 @@ import sys as _sys
 # When running as a PyInstaller exe, __file__ points to a temp folder that gets
 # wiped on every launch. We need a persistent location for config/history/screenshots.
 if getattr(_sys, "frozen", False):
-    # Running as compiled exe — use the folder the exe lives in
+    # Running as compiled exe - use the folder the exe lives in
     _BASE = os.path.dirname(os.path.abspath(_sys.executable))
 else:
-    # Running as a Python script — use the script folder
+    # Running as a Python script - use the script folder
     _BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE     = os.path.join(_BASE, "raid_bot_config.json")
 SCREENSHOTS_DIR = os.path.join(_BASE, "raid_screenshots")
@@ -96,7 +96,7 @@ DEFAULT_CONFIG = {
     "webhook_desc_2": "Ally #1",
     "webhook_desc_3": "Ally #2",
     "discord_message": "<@&870791568200704030> <@&870791620910538783> <@&1454940232712454297> RAID DETECTED! Join the server in the screenshot below or click the link below: https://www.roblox.com/users/9405149316/profile",
-    "version": "1.2.1",
+    "version": "1.2.2",
     "update_check_enabled": True,
     "update_repo": "typekaiser/kaisers-raid-utility",
     "clip_enabled": True,
@@ -122,7 +122,7 @@ DEFAULT_CONFIG = {
     "lite_mode": False,
     "first_launch_done": False,
     "stop_message_enabled": True,
-    "stop_message": "⏸️ Bot paused — changing server, back soon.",
+    "stop_message": "⏸️ Bot paused - changing server, back soon.",
     "daily_summary_enabled": True,
     "leaderboard_enabled": True,
     "flash_taskbar": True,
@@ -348,7 +348,7 @@ def pick_scan_zone(on_done):
 
 
 # ── Capture ───────────────────────────────────────────────────────────────────
-# Thread-local mss instances — each thread gets its own, avoiding srcdc errors
+# Thread-local mss instances - each thread gets its own, avoiding srcdc errors
 _tls = threading.local()
 
 def get_mss():
@@ -456,7 +456,7 @@ def detect_template(img, confidence=75):
 
 # ── Discord ───────────────────────────────────────────────────────────────────
 def detect_raid_text(img, keywords):
-    """OCR-based raid detection — checks image text for raid keywords."""
+    """OCR-based raid detection - checks image text for raid keywords."""
     if not OCR_AVAILABLE:
         return False, ""
     try:
@@ -614,9 +614,9 @@ class RaidBotApp:
         if WIN32_AVAILABLE:
             self.log("win32gui: OK", "green")
         else:
-            self.log(f"win32gui unavailable — PowerShell fallback active", "yellow")
+            self.log(f"win32gui unavailable - PowerShell fallback active", "yellow")
         self.log(f"OCR: {'ready' if OCR_AVAILABLE else 'not available'}", "green" if OCR_AVAILABLE else "yellow")
-        self.log(f"Hotkey: {'ready (' + self.cfg['hotkey'] + ')' if KEYBOARD_AVAILABLE else 'keyboard lib not installed — run: pip install keyboard'}", 
+        self.log(f"Hotkey: {'ready (' + self.cfg['hotkey'] + ')' if KEYBOARD_AVAILABLE else 'keyboard lib not installed - run: pip install keyboard'}", 
                  "green" if KEYBOARD_AVAILABLE else "yellow")
 
         zone = self.cfg.get("scan_zone")
@@ -656,7 +656,7 @@ class RaidBotApp:
         self._unregister_hotkey()
         hk = self.cfg.get("hotkey", "f8").strip()
         if not hk:
-            self.log("No hotkey set — skipping.", "yellow")
+            self.log("No hotkey set - skipping.", "yellow")
             return
         try:
             keyboard.add_hotkey(hk, self._hotkey_fired)
@@ -673,7 +673,7 @@ class RaidBotApp:
             pass
 
     def _hotkey_fired(self):
-        """Called from keyboard thread — schedule on main thread."""
+        """Called from keyboard thread - schedule on main thread."""
         self.root.after(0, self._manual_alert)
 
     # ── UI build ──────────────────────────────────────────────────────────────
@@ -710,7 +710,7 @@ class RaidBotApp:
         self._tab_log(self.nb)
         self._tab_help(self.nb)
 
-        # Global mousewheel — scrolls whatever widget is under the cursor
+        # Global mousewheel - scrolls whatever widget is under the cursor
         def _global_scroll(e):
             widget = e.widget
             # Walk up the widget tree looking for something scrollable
@@ -759,7 +759,7 @@ class RaidBotApp:
         self.watch_lbl = tk.Label(banner_inner, text="Bot is offline",
                                    bg=BG3, fg=SUB, font=("Consolas", 14, "bold"))
         self.watch_lbl.pack(side="left")
-        # "Feeling Stuck?" button — always visible in the top banner
+        # "Feeling Stuck?" button - always visible in the top banner
         stuck_btn = tk.Button(banner_inner, text="❓ Feeling Stuck?",
                               bg=YELLOW, fg=BG, relief="flat",
                               font=("Consolas", 9, "bold"), cursor="hand2",
@@ -798,8 +798,8 @@ class RaidBotApp:
                   cursor="hand2", pady=10,
                   command=self._manual_alert).pack(side="left", fill="x", expand=True, padx=(3, 0))
 
-        # ══ ROBLOX WINDOW — simplified ═════════════════════════════════════════
-        sec = self._section(f, "🎮  STEP 1 — Pick your Roblox window")
+        # ══ ROBLOX WINDOW - simplified ═════════════════════════════════════════
+        sec = self._section(f, "🎮  STEP 1 - Pick your Roblox window")
         row = tk.Frame(sec, bg=BG2); row.pack(fill="x", pady=(0,4))
         self.window_var = tk.StringVar()
         self.window_combo = ttk.Combobox(row, textvariable=self.window_var,
@@ -808,7 +808,7 @@ class RaidBotApp:
         self.window_combo.bind("<<ComboboxSelected>>", self._on_window_select)
         self._btn(row, "🔄 Refresh", self._refresh_windows, ACCENT).pack(side="left")
 
-        # ══ STATS — compact row ════════════════════════════════════════════════
+        # ══ STATS - compact row ════════════════════════════════════════════════
         stats_frame = tk.Frame(f, bg=BG); stats_frame.pack(fill="x", padx=8, pady=(6, 4))
         self._big_stat(stats_frame, "🚨", "Alerts", "0", "stat_alerts")
         self._big_stat(stats_frame, "⏱",  "Uptime", "00:00", "stat_uptime")
@@ -832,7 +832,7 @@ class RaidBotApp:
         tk.Label(prev_frame, text="📹 LIVE SCAN PREVIEW",
                  bg=BG2, fg=SUB, font=("Consolas", 8, "bold")).pack(anchor="w", padx=6, pady=(4,0))
         self.preview_lbl = tk.Label(prev_frame, bg="#111",
-                                    text="No preview yet — start the bot", fg=SUB,
+                                    text="No preview yet - start the bot", fg=SUB,
                                     font=("Consolas", 9))
         self.preview_lbl.pack(padx=6, pady=(2, 6), fill="both", expand=True)
 
@@ -847,7 +847,7 @@ class RaidBotApp:
 
         # Advanced container (hidden by default)
         self._adv_container = tk.Frame(f, bg=BG)
-        # Detection mode — only one option now (Template + OCR)
+        # Detection mode - only one option now (Template + OCR)
         sec2 = self._section(self._adv_container, "DETECTION MODE")
         self.mode_var = tk.StringVar(value="template_ocr")
         tk.Label(sec2, text="Template Match + OCR (only supported mode)",
@@ -1044,7 +1044,7 @@ class RaidBotApp:
                  relief="flat", bd=4).pack(side="left", padx=4)
 
         # ── HOTKEY ────────────────────────────────────────────────────────────
-        sec6 = self._section(f, "HOTKEY  (global — works even in-game)")
+        sec6 = self._section(f, "HOTKEY  (global - works even in-game)")
         hk_row = tk.Frame(sec6, bg=BG2); hk_row.pack(fill="x")
         tk.Label(hk_row, text="Manual ping key:", bg=BG2, fg=TEXT,
                  font=("Consolas", 9)).pack(side="left")
@@ -1142,7 +1142,7 @@ class RaidBotApp:
 
         # Heatmap canvas
         hm_frame = tk.Frame(f, bg=BG2); hm_frame.pack(fill="x", padx=8, pady=(0,6))
-        tk.Label(hm_frame, text="RAID HEATMAP  (days × hours — darker = more raids)",
+        tk.Label(hm_frame, text="RAID HEATMAP  (days × hours - darker = more raids)",
                  bg=BG2, fg=SUB, font=("Consolas", 7)).pack(anchor="w", padx=4, pady=(2,0))
         self.heatmap_canvas = tk.Canvas(hm_frame, bg=BG2, height=110, highlightthickness=0)
         self.heatmap_canvas.pack(fill="x", padx=4, pady=4)
@@ -1259,7 +1259,7 @@ class RaidBotApp:
             for w in step_container.winfo_children():
                 w.destroy()
             if state["step"] == 0:
-                tk.Label(step_container, text="STEP 1 — Paste your Discord webhook URL",
+                tk.Label(step_container, text="STEP 1 - Paste your Discord webhook URL",
                          bg=BG, fg=TEXT, font=("Consolas", 10, "bold")).pack(anchor="w", pady=(10,4))
                 tk.Label(step_container, text="In Discord: Server Settings → Integrations → Webhooks → New → Copy URL",
                          bg=BG, fg=SUB, font=("Consolas", 8), wraplength=440, justify="left").pack(anchor="w", pady=(0,8))
@@ -1279,7 +1279,7 @@ class RaidBotApp:
                           bg=ACCENT, fg="white", relief="flat",
                           font=("Consolas", 9, "bold"), width=12).pack(pady=10)
             elif state["step"] == 1:
-                tk.Label(step_container, text="STEP 2 — Select your Roblox window",
+                tk.Label(step_container, text="STEP 2 - Select your Roblox window",
                          bg=BG, fg=TEXT, font=("Consolas", 10, "bold")).pack(anchor="w", pady=(10,4))
                 tk.Label(step_container, text="Make sure Roblox is open first. Click Refresh then pick the right one.",
                          bg=BG, fg=SUB, font=("Consolas", 8), wraplength=440, justify="left").pack(anchor="w", pady=(0,8))
@@ -1307,7 +1307,7 @@ class RaidBotApp:
                           bg=ACCENT, fg="white", relief="flat",
                           font=("Consolas", 9, "bold"), width=12).pack(pady=10)
             else:
-                tk.Label(step_container, text="STEP 3 — You're all set ✅",
+                tk.Label(step_container, text="STEP 3 - You're all set ✅",
                          bg=BG, fg=GREEN, font=("Consolas", 11, "bold")).pack(pady=(20,8))
                 tk.Label(step_container, text="Click FINISH to close this wizard.\nHit START on the MAIN tab whenever you're ready.",
                          bg=BG, fg=TEXT, font=("Consolas", 9), justify="center").pack(pady=(0,12))
@@ -1336,7 +1336,7 @@ class RaidBotApp:
         }
         self.cfg.update(presets)
         save_config(self.cfg)
-        self.log("Quick Setup applied — recommended Fistborn settings loaded.", "green")
+        self.log("Quick Setup applied - recommended Fistborn settings loaded.", "green")
 
     def _paste_webhook(self):
         try:
@@ -1350,7 +1350,7 @@ class RaidBotApp:
             self.log("Could not read clipboard.", "yellow")
 
     def _toggle_streamer_mode(self):
-        """Toggle streamer mode — hides webhook and ntfy channel in UI."""
+        """Toggle streamer mode - hides webhook and ntfy channel in UI."""
         self.cfg["streamer_mode"] = not self.cfg.get("streamer_mode", False)
         save_config(self.cfg)
         state = "ON" if self.cfg["streamer_mode"] else "OFF"
@@ -1379,7 +1379,7 @@ class RaidBotApp:
                                               relief="flat", bd=4, wrap="word")
         help_box.pack(fill="both", expand=True, padx=6, pady=6)
         help_box.insert("1.0", """
-TYPE://KAISERS RAID UTILITY — QUICK GUIDE
+TYPE://KAISERS RAID UTILITY - QUICK GUIDE
 
 ● MAIN TAB
   Select the Roblox window you want monitored from the dropdown.
@@ -1405,7 +1405,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
   Heatmap shows which day and hour raids happen most often.
 
 ● HOTKEY
-  Default F8 — fires a manual raid ping from anywhere, even in-game.
+  Default F8 - fires a manual raid ping from anywhere, even in-game.
 
 ● TEST FUNCTIONS
   Test Raid Alert: fires a full raid alert without pinging, so you can verify Discord.
@@ -1420,7 +1420,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
   False raid alerts: increase Template Confidence or tighten the scan zone.
   Missed raids: decrease Template Confidence, verify scan zone covers the banner.
 
-● KAISERS RAID BOT MADE BY @_KAISUR_ — HMU ON DISCORD IF SOMETHING BREAKS
+● KAISERS RAID BOT MADE BY @_KAISUR_ - HMU ON DISCORD IF SOMETHING BREAKS
 """)
         help_box.config(state="disabled")
 
@@ -1433,7 +1433,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
         def _send():
             ok = send_ntfy(channel, "🧪 TYPE://KAISERS Test",
                            "If you see this on your phone, ntfy is working.")
-            self.log(f"Ntfy test: {'sent OK — check your phone' if ok else 'FAILED'}",
+            self.log(f"Ntfy test: {'sent OK - check your phone' if ok else 'FAILED'}",
                      "green" if ok else "red")
         threading.Thread(target=_send, daemon=True).start()
 
@@ -1606,7 +1606,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                 url = f"https://api.github.com/repos/{repo}/releases/latest"
                 resp = requests.get(url, timeout=10)
                 if resp.status_code != 200:
-                    self.root.after(0, lambda: _close_status("Could not check — no connection", YELLOW))
+                    self.root.after(0, lambda: _close_status("Could not check - no connection", YELLOW))
                     return
                 data = resp.json()
                 remote_ver = data.get("tag_name", "").lstrip("v").strip()
@@ -1658,7 +1658,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
         tk.Label(top, text=f"Current: v{cur_ver}    →    New: v{new_ver}",
                  bg=BG, fg=TEXT, font=("Consolas", 10)).pack()
         if critical:
-            tk.Label(top, text="⚠️  CRITICAL UPDATE — highly recommended",
+            tk.Label(top, text="⚠️  CRITICAL UPDATE - highly recommended",
                      bg=BG, fg=ACCENT, font=("Consolas", 9, "bold")).pack(pady=(4,0))
 
         tk.Label(top, text="What's new:", bg=BG, fg=SUB,
@@ -1771,7 +1771,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                 text = self.nb.tab(i, "text")
                 if "HELP" in text.upper():
                     self.nb.select(i)
-                    self.log("Opened Help tab — read through for common questions.", "green")
+                    self.log("Opened Help tab - read through for common questions.", "green")
                     return
         except Exception:
             pass
@@ -2005,7 +2005,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                                "🧪 TYPE://KAISERS Test Alert",
                                "This is a test of the raid bot notification system. No real raid happened.",
                                priority="default")
-                self.log(f"Ntfy test push: {'sent — check phone' if ok else 'FAILED'}",
+                self.log(f"Ntfy test push: {'sent - check phone' if ok else 'FAILED'}",
                          "green" if ok else "yellow")
             threading.Thread(target=_test_push, daemon=True).start()
 
@@ -2022,7 +2022,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
 
             webhook = self.cfg.get("webhook_url", "")
             if not webhook:
-                self.log("No webhook set — add one in Settings first.", "red")
+                self.log("No webhook set - add one in Settings first.", "red")
                 return
 
             # Screenshot + topbar stitch (same as real alert)
@@ -2049,12 +2049,12 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                 except Exception:
                     screenshot_path = None
 
-            # Build embed — same as real raid but clearly marked as test
+            # Build embed - same as real raid but clearly marked as test
             ts_iso = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
             uptime_secs = int(time.time() - self.start_time) if hasattr(self, "start_time") else 0
             uptime_str = f"{uptime_secs // 3600:02}:{(uptime_secs % 3600) // 60:02}:{uptime_secs % 60:02}"
             embed = {
-                "title": "🧪  TEST ALERT — Not a real raid",
+                "title": "🧪  TEST ALERT - Not a real raid",
                 "description": "This is a test of the raid detection system.",
                 "color": 0x5865F2,
                 "fields": [
@@ -2174,7 +2174,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
             return
         self._calibrating = True
         self.cal_btn.config(state="disabled", text="Calibrating...")
-        self.log("Auto-calibrate: sampling for 5 seconds — make sure NO raid is showing!", "yellow")
+        self.log("Auto-calibrate: sampling for 5 seconds - make sure NO raid is showing!", "yellow")
         samples = []
 
         def _sample():
@@ -2200,7 +2200,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                 self.root.after(0, lambda: self.cal_lbl.config(
                     text=f"  Done! Threshold set to {suggested}"))
             else:
-                self.root.after(0, lambda: self.log("Calibration failed — no capture.", "red"))
+                self.root.after(0, lambda: self.log("Calibration failed - no capture.", "red"))
 
             self._calibrating = False
             self.root.after(0, lambda: self.cal_btn.config(
@@ -2294,7 +2294,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
             self.paused = True
             self.pause_btn.config(text="RESUME")
             self.watch_dot.config(fg=YELLOW)
-            self.watch_lbl.config(text="Bot paused — scanning suspended", fg=YELLOW)
+            self.watch_lbl.config(text="Bot paused - scanning suspended", fg=YELLOW)
             self.log("Bot paused. Heartbeat still active.", "yellow")
             # Send pause message to Discord
             webhook = self.cfg.get("webhook_url", "")
@@ -2432,7 +2432,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
             return
 
         if img is None:
-            self.log("Could not capture — is Roblox visible and not minimised?", "yellow")
+            self.log("Could not capture - is Roblox visible and not minimised?", "yellow")
             return
 
         self.root.after(0, lambda i=img: self._update_preview(i))
@@ -2442,7 +2442,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
         detected = False
         reason = ""
 
-        # Template matching — fastest and most accurate
+        # Template matching - fastest and most accurate
         if mode in ("template", "template_ocr", "all"):
             found, conf = detect_template(img, self.cfg.get("template_confidence", 75))
             self.log(f"Template confidence: {conf}%", "white")
@@ -2481,7 +2481,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                                  args=(alert_img, reason), daemon=True).start()
             else:
                 remaining = int(self.cfg["cooldown"] - (now - self.last_alert_time))
-                self.log(f"Raid detected — cooldown {remaining}s", "yellow")
+                self.log(f"Raid detected - cooldown {remaining}s", "yellow")
 
     def _trigger_alert(self, img, reason=""):
         self.alert_count += 1
@@ -2540,7 +2540,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
         except Exception:
             pass
 
-        # Discord — broadcast to all configured webhooks
+        # Discord - broadcast to all configured webhooks
         webhooks = self._get_webhooks()
         if webhooks:
             ts_iso = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -2625,7 +2625,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
             def _push():
                 send_ntfy(self.cfg["ntfy_channel"],
                           "🚨 Gang Base Raided",
-                          f"Raid #{self.session_raid_count} detected — {reason}")
+                          f"Raid #{self.session_raid_count} detected - {reason}")
             threading.Thread(target=_push, daemon=True).start()
 
     def _heartbeat_loop(self):
@@ -2754,7 +2754,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
         if not webhook:
             return
 
-        # UK time — accounts for GMT/BST automatically
+        # UK time - accounts for GMT/BST automatically
         # BST (UTC+1) runs last Sunday March → last Sunday October
         now_utc = datetime.datetime.now(timezone.utc)
         # Simple BST check: month 4-10 inclusive = BST, else GMT
@@ -2881,7 +2881,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
         webhook = self.cfg.get("webhook_url", "")
         if not webhook:
             return
-        # Read fresh from history file — works even if bot was stopped overnight
+        # Read fresh from history file - works even if bot was stopped overnight
         history = load_history()
         yesterday = (datetime.date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
         yesterday_display = (datetime.date.today() - timedelta(days=1)).strftime("%d/%m/%Y")
@@ -2891,7 +2891,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
         time_list = ", ".join(times) if times else "None"
         ts_iso = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         embed = {
-            "title": f"📊 Daily Raid Summary — {yesterday_display}",
+            "title": f"📊 Daily Raid Summary - {yesterday_display}",
             "description": "Here's how yesterday looked on the gang base.",
             "color": 0xF0C040,
             "fields": [
@@ -2995,7 +2995,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
 
     def _update_preview(self, img):
         try:
-            # Maintain aspect ratio — fit inside 420x220
+            # Maintain aspect ratio - fit inside 420x220
             max_w, max_h = 420, 220
             ratio = min(max_w / img.width, max_h / img.height)
             new_w = int(img.width * ratio)
