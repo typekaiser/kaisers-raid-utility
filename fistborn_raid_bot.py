@@ -68,6 +68,9 @@ except Exception:
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 import sys as _sys
+# Hard-coded version constant. This is the source of truth, NOT the config file.
+# Config versions can be stale after updates, so we always check code version.
+APP_VERSION = "1.2.6"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -119,7 +122,7 @@ DEFAULT_CONFIG = {
     "roblox_cookie": "",
     "roblox_user_id": "9405149316",
     "auto_fetch_join_link": True,
-    "version": "1.2.5",
+    "version": APP_VERSION,
     "update_check_enabled": True,
     "update_repo": "typekaiser/kaisers-raid-utility",
     "clip_enabled": True,
@@ -176,6 +179,9 @@ def load_config():
                 cfg = json.load(f)
             for k, v in DEFAULT_CONFIG.items():
                 cfg.setdefault(k, v)
+            # ALWAYS override version with the current code's version,
+            # otherwise old configs keep stale version strings forever
+            cfg["version"] = APP_VERSION
             return cfg
         except Exception:
             pass
@@ -651,7 +657,7 @@ def play_sound(style="beep"):
 class RaidBotApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TYPE://KAISERS RAID UTILITY V1 ALPHA")
+        self.root.title(f"TYPE://KAISERS RAID UTILITY  v{APP_VERSION}")
         self.root.configure(bg=BG)
         self.root.resizable(True, True)
         self.root.geometry("700x920")
@@ -1805,7 +1811,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                 "title": "✅  Webhook Connected",
                 "description": "TYPE://KAISERS Raid Utility is connected to this channel.",
                 "color": 0x3CE066,
-                "footer": {"text": "TYPE://KAISERS Raid Utility V1 Alpha"},
+                "footer": {"text": f"TYPE://KAISERS Raid Utility v{APP_VERSION}"},
                 "timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
             }
             ok, info, _ = send_discord(webhook, None, embed=embed)
@@ -1959,7 +1965,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
 
         def _check():
             try:
-                current_ver = self.cfg.get("version", "1.0.0")
+                current_ver = APP_VERSION
                 url = f"https://api.github.com/repos/{repo}/releases/latest"
                 resp = requests.get(url, timeout=10)
                 if resp.status_code != 200:
@@ -2426,9 +2432,40 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                     {"name": "⏱️ Bot Uptime",        "value": f"`{uptime_str}`",        "inline": True},
                     {"name": "🕐 Triggered At",      "value": f"<t:{int(time.time())}:F>", "inline": False},
                 ],
-                "footer": {"text": "TYPE://KAISERS Raid Utility V1 Alpha  •  Test mode"},
+                "footer": {"text": f"TYPE://KAISERS Raid Utility v{APP_VERSION}  •  Test mode"},
                 "timestamp": ts_iso,
             }
+
+            # Include the auto-fetched join link in the test too, so user can verify it works
+            test_join_link = (self.cfg.get("server_join_link") or "").strip()
+            if self.cfg.get("auto_fetch_join_link", True) and self.cfg.get("join_link_enabled", True):
+                uid    = (self.cfg.get("roblox_user_id") or "").strip()
+                cookie = (self.cfg.get("roblox_cookie") or "").strip()
+                if uid and cookie:
+                    self.log("🔄 Test: fetching current server link...", "white")
+                    try:
+                        fetched = fetch_roblox_presence(uid, cookie)
+                        if fetched and fetched.get("join_link") and not fetched.get("error"):
+                            test_join_link = fetched["join_link"]
+                            self.log(f"   ✓ Got live server link", "green")
+                        else:
+                            err = (fetched or {}).get("error", "no response")
+                            self.log(f"   ⚠ Auto-fetch failed: {err}", "yellow")
+                            if fetched and fetched.get("userPresenceType") is not None:
+                                status_map = {0: "Offline", 1: "Online (website)",
+                                              2: "In-Game", 3: "In-Studio"}
+                                s = status_map.get(fetched["userPresenceType"], "Unknown")
+                                self.log(f"   User status: {s}", "yellow")
+                    except Exception as e:
+                        self.log(f"   ⚠ Auto-fetch error: {e}", "yellow")
+                else:
+                    self.log("   ⚠ Auto-fetch skipped: cookie or user ID missing", "yellow")
+            if test_join_link and self.cfg.get("join_link_enabled", True):
+                embed["fields"].append({
+                    "name": "🎯 One-Click Join (test)",
+                    "value": f"[**→ Join the server**]({test_join_link})",
+                    "inline": False,
+                })
 
             # Strip all @mentions from the alert message so nobody gets pinged
             safe_msg = re.sub(r"@(everyone|here|&?\d+)", "", self.cfg.get("discord_message", "")).strip()
@@ -2447,7 +2484,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                     "title": "📋  Test - Current Server List",
                     "description": "Everyone on the server at time of test.",
                     "color": 0x5865F2,
-                    "footer": {"text": "TYPE://KAISERS Raid Utility V1 Alpha  •  Test mode"},
+                    "footer": {"text": f"TYPE://KAISERS Raid Utility v{APP_VERSION}  •  Test mode"},
                     "timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
                 }
                 ok2, info2, _ = send_discord(webhook, None, lb_path, embed=lb_embed, filename="leaderboard.png")
@@ -2649,7 +2686,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                     "title": "🟢  Bot is now Online",
                     "description": "TYPE://KAISERS Raid Utility has started. Watching the gang base.",
                     "color": 0x3CE066,
-                    "footer": {"text": "TYPE://KAISERS Raid Utility V1 Alpha"},
+                    "footer": {"text": f"TYPE://KAISERS Raid Utility v{APP_VERSION}"},
                     "timestamp": ts_iso,
                 }
                 _, _, msg_id = send_discord(webhook, None, embed=embed)
@@ -2679,7 +2716,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                         {"name": "⏱️ Session Uptime", "value": f"`{uptime_str}`",              "inline": True},
                         {"name": "🔢 Raids Detected", "value": f"`{self.session_raid_count}`", "inline": True},
                     ],
-                    "footer": {"text": "TYPE://KAISERS Raid Utility V1 Alpha  •  Scanning suspended"},
+                    "footer": {"text": f"TYPE://KAISERS Raid Utility v{APP_VERSION}  •  Scanning suspended"},
                     "timestamp": ts_iso,
                 }
                 threading.Thread(
@@ -2700,7 +2737,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                     "title": "▶️  Bot Resumed",
                     "description": "🟢 Back online and watching the gang base.",
                     "color": 0x3CE066,
-                    "footer": {"text": "TYPE://KAISERS Raid Utility V1 Alpha"},
+                    "footer": {"text": f"TYPE://KAISERS Raid Utility v{APP_VERSION}"},
                     "timestamp": ts_iso,
                 }
                 threading.Thread(
@@ -2749,7 +2786,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                         {"name": "🔢 Raids Detected",    "value": f"`{self.session_raid_count}`", "inline": True},
                         {"name": "🕐 Raid Times (today)", "value": raid_times,                    "inline": False},
                     ],
-                    "footer": {"text": "TYPE://KAISERS Raid Utility V1 Alpha  •  Session ended"},
+                    "footer": {"text": f"TYPE://KAISERS Raid Utility v{APP_VERSION}  •  Session ended"},
                     "timestamp": ts_iso,
                 }
                 send_discord(webhook, None, embed=embed)
@@ -2934,7 +2971,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                     {"name": "🕐 Detected At",       "value": f"<t:{int(time.time())}:F>",                           "inline": False},
                 ] + ([{"name": "⏳ Since Last Raid", "value": f"`{time_since}`", "inline": True}] if time_since else []),
                 "footer": {
-                    "text": f"TYPE://KAISERS Raid Utility V1 Alpha  •  Stay ready  •  Cooldown: {self.cfg.get('cooldown',30)}s"
+                    "text": f"TYPE://KAISERS Raid Utility v{APP_VERSION}  •  Stay ready  •  Cooldown: {self.cfg.get('cooldown',30)}s"
                 },
                 "timestamp": ts_iso,
             }
@@ -2993,7 +3030,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                         "title": "📋  Current Server List",
                         "description": "Everyone on the server at the time of the raid.",
                         "color": 0x5865F2,
-                        "footer": {"text": "TYPE://KAISERS Raid Utility V1 Alpha"},
+                        "footer": {"text": f"TYPE://KAISERS Raid Utility v{APP_VERSION}"},
                         "timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
                     }
                     for url, desc in webhooks:
@@ -3192,7 +3229,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                 {"name": "📋 Raids Today",  "value": f"`{raids_today}`",                                    "inline": True},
             ],
             "footer": {
-                "text": "TYPE://KAISERS Raid Utility V1 Alpha  •  Next update in 15 mins"
+                "text": f"TYPE://KAISERS Raid Utility v{APP_VERSION}  •  Next update in 15 mins"
             },
             "timestamp": ts_iso,
         }
@@ -3243,7 +3280,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                         "fields": [
                             {"name": "🔢 Raids Detected", "value": f"`{self.session_raid_count}`", "inline": True},
                         ],
-                        "footer": {"text": "TYPE://KAISERS Raid Utility V1 Alpha"},
+                        "footer": {"text": f"TYPE://KAISERS Raid Utility v{APP_VERSION}"},
                         "timestamp": ts_iso,
                     }
                     _, _, msg_id = send_discord(webhook, None, embed=embed)
@@ -3292,7 +3329,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                 {"name": "Total Raids", "value": str(count),   "inline": True},
                 {"name": "Times (UK)",  "value": time_list,    "inline": False},
             ],
-            "footer": {"text": "TYPE://KAISERS Raid Utility V1 Alpha"},
+            "footer": {"text": f"TYPE://KAISERS Raid Utility v{APP_VERSION}"},
             "timestamp": ts_iso,
         }
         send_discord(webhook, None, embed=embed)
