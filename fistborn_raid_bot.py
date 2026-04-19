@@ -67,27 +67,44 @@ except Exception:
     KEYBOARD_AVAILABLE = False
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-_BASE = os.path.dirname(os.path.abspath(__file__))
+import sys as _sys
+# When running as a PyInstaller exe, __file__ points to a temp folder that gets
+# wiped on every launch. We need a persistent location for config/history/screenshots.
+if getattr(_sys, "frozen", False):
+    # Running as compiled exe — use the folder the exe lives in
+    _BASE = os.path.dirname(os.path.abspath(_sys.executable))
+else:
+    # Running as a Python script — use the script folder
+    _BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE     = os.path.join(_BASE, "raid_bot_config.json")
 SCREENSHOTS_DIR = os.path.join(_BASE, "raid_screenshots")
-TRIGGER_FILE    = os.path.join(_BASE, "raid_trigger.txt")
 HISTORY_FILE    = os.path.join(_BASE, "raid_history.json")
-TEMPLATE_FILE   = os.path.join(_BASE, "banner_template.png")
+TRIGGER_FILE    = os.path.join(_BASE, "raid_trigger.txt")
+# Template is bundled INSIDE the exe, so look there first, then fall back to disk
+if getattr(_sys, "frozen", False) and hasattr(_sys, "_MEIPASS"):
+    TEMPLATE_FILE = os.path.join(_sys._MEIPASS, "banner_template.png")
+    if not os.path.exists(TEMPLATE_FILE):
+        TEMPLATE_FILE = os.path.join(_BASE, "banner_template.png")
+else:
+    TEMPLATE_FILE = os.path.join(_BASE, "banner_template.png")
 
 DEFAULT_CONFIG = {
     "webhook_url": "",
     "webhook_url_2": "",
     "webhook_url_3": "",
-    "discord_message": "@everyone RAID DETECTED! Get on NOW!",
-    "version": "1.0.0",
+    "webhook_desc": "Primary gang server",
+    "webhook_desc_2": "Ally #1",
+    "webhook_desc_3": "Ally #2",
+    "discord_message": "<@&870791568200704030> <@&870791620910538783> <@&1454940232712454297> RAID DETECTED! Join the server in the screenshot below or click the link below: https://www.roblox.com/users/9405149316/profile",
+    "version": "1.2.0",
     "update_check_enabled": True,
-    "update_repo": "",
+    "update_repo": "typekaiser/kaisers-raid-utility",
     "clip_enabled": True,
     "selected_window_title": "",
     "red_threshold": 50,
     "scan_interval": 1,
     "cooldown": 30,
-    "detection_mode": "template",
+    "detection_mode": "template_ocr",
     "raid_text_keywords": ["INVADED", "RAID", "ATTACK"],
     "template_confidence": 75,
     "sound_enabled": True,
@@ -100,7 +117,7 @@ DEFAULT_CONFIG = {
     "anti_afk_enabled": False,
     "anti_afk_interval": 300,
     "ntfy_enabled": False,
-    "ntfy_channel": "",
+    "ntfy_channel": "kaiser-raid-bot",
     "streamer_mode": False,
     "lite_mode": False,
     "first_launch_done": False,
@@ -117,14 +134,14 @@ DEFAULT_CONFIG = {
 }
 
 # ── Colours ───────────────────────────────────────────────────────────────────
-BG     = "#0d0d0d"
-BG2    = "#161616"
-BG3    = "#1e1e1e"
-ACCENT = "#e03c3c"
-GREEN  = "#3ce066"
-YELLOW = "#f0c040"
-TEXT   = "#f0f0f0"
-SUB    = "#888888"
+BG     = "#141421"
+BG2    = "#1e1e2e"
+BG3    = "#2a2a3d"
+ACCENT = "#ff4d6d"
+GREEN  = "#4ade80"
+YELLOW = "#fbbf24"
+TEXT   = "#f8f8ff"
+SUB    = "#a0a0b8"
 BORDER = "#2a2a2a"
 
 
@@ -575,6 +592,7 @@ class RaidBotApp:
         self._calibrating    = False
         self._frame_buffer   = []  # ring buffer of (timestamp, PIL.Image) for clip feature
         self._frame_buffer_max = 20
+        self._dev_unlocked   = False
 
         os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
         self._build_ui()
@@ -711,8 +729,24 @@ class RaidBotApp:
     # ── MAIN TAB ──────────────────────────────────────────────────────────────
 
     def _tab_main(self, nb):
-        f = tk.Frame(nb, bg=BG)
-        nb.add(f, text="  🏠 MAIN  ")
+        outer = tk.Frame(nb, bg=BG)
+        nb.add(outer, text="  🏠 MAIN  ")
+
+        canvas = tk.Canvas(outer, bg=BG, highlightthickness=0)
+        vsb = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        f = tk.Frame(canvas, bg=BG)
+        win_id = canvas.create_window((0, 0), window=f, anchor="nw")
+
+        def _on_frame_configure(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        def _on_canvas_configure(e):
+            canvas.itemconfig(win_id, width=e.width)
+        f.bind("<Configure>", _on_frame_configure)
+        canvas.bind("<Configure>", _on_canvas_configure)
 
         # ══ BIG STATUS BANNER AT TOP ═══════════════════════════════════════════
         self.watch_frame = tk.Frame(f, bg=BG3)
@@ -725,9 +759,15 @@ class RaidBotApp:
         self.watch_lbl = tk.Label(banner_inner, text="Bot is offline",
                                    bg=BG3, fg=SUB, font=("Consolas", 14, "bold"))
         self.watch_lbl.pack(side="left")
+        # "Feeling Stuck?" button — always visible in the top banner
+        stuck_btn = tk.Button(banner_inner, text="❓ Feeling Stuck?",
+                              bg=YELLOW, fg=BG, relief="flat",
+                              font=("Consolas", 9, "bold"), cursor="hand2",
+                              command=self._show_help_popup)
+        stuck_btn.pack(side="right", padx=(4, 16))
         self.watch_scan_lbl = tk.Label(banner_inner, text="",
                                         bg=BG3, fg=SUB, font=("Consolas", 9))
-        self.watch_scan_lbl.pack(side="right", padx=16)
+        self.watch_scan_lbl.pack(side="right", padx=4)
 
         # ══ BIG MAIN CONTROL BUTTONS ═══════════════════════════════════════════
         ctrl = tk.Frame(f, bg=BG); ctrl.pack(fill="x", padx=8, pady=(2, 6))
@@ -807,21 +847,13 @@ class RaidBotApp:
 
         # Advanced container (hidden by default)
         self._adv_container = tk.Frame(f, bg=BG)
-        # Detection mode
+        # Detection mode — only one option now (Template + OCR)
         sec2 = self._section(self._adv_container, "DETECTION MODE")
-        self.mode_var = tk.StringVar(value=self.cfg["detection_mode"])
-        modes = [
-            ("Template Match (recommended)", "template"),
-            ("Red Pixels only",              "red_pixels"),
-            ("Text (OCR) only",              "text"),
-            ("Template + OCR",               "template_ocr"),
-            ("Both (Red + OCR)",             "both"),
-            ("All (Template + Red + OCR)",   "all"),
-        ]
-        for lbl, val in modes:
-            tk.Radiobutton(sec2, text=lbl, variable=self.mode_var, value=val,
-                           bg=BG2, fg=TEXT, selectcolor=BG3, activebackground=BG2,
-                           font=("Consolas", 9)).pack(anchor="w")
+        self.mode_var = tk.StringVar(value="template_ocr")
+        tk.Label(sec2, text="Template Match + OCR (only supported mode)",
+                 bg=BG2, fg=GREEN, font=("Consolas", 9, "bold")).pack(anchor="w")
+        tk.Label(sec2, text="Scans for the raid banner image, falls back to OCR text detection as backup.",
+                 bg=BG2, fg=SUB, font=("Consolas", 8), wraplength=500, justify="left").pack(anchor="w", pady=(2,0))
         tpl_row = tk.Frame(sec2, bg=BG2); tpl_row.pack(fill="x", pady=(4,0))
         tpl_exists = os.path.exists(TEMPLATE_FILE)
         self.tpl_lbl = tk.Label(tpl_row,
@@ -913,9 +945,12 @@ class RaidBotApp:
 
         # ── DISCORD ───────────────────────────────────────────────────────────
         sec = self._section(f, "DISCORD  (primary webhook + 2 optional ally slots)")
-        self._field(sec, "Webhook URL:", "webhook_url", width=56)
+        self._field(sec, "Primary Webhook URL:", "webhook_url", width=56)
+        self._field(sec, "Primary Description:", "webhook_desc", width=56)
         self._field(sec, "Ally Webhook #2 (optional):", "webhook_url_2", width=56)
+        self._field(sec, "Ally #2 Description:", "webhook_desc_2", width=56)
         self._field(sec, "Ally Webhook #3 (optional):", "webhook_url_3", width=56)
+        self._field(sec, "Ally #3 Description:", "webhook_desc_3", width=56)
         self._field(sec, "Alert Message:", "discord_message", width=56)
 
         # Live webhook status indicator
@@ -1027,34 +1062,43 @@ class RaidBotApp:
                        activebackground=BG2, font=("Consolas", 9)).pack(anchor="w")
         self._slider(sec_afk, "Click interval (sec):", "anti_afk_interval", 60, 600)
 
-        sec_update = self._section(f, "AUTO-UPDATE  (GitHub Releases)")
+        sec_update = self._section(f, "AUTO-UPDATE  🔒")
         self.update_check_var = tk.BooleanVar(value=self.cfg.get("update_check_enabled", True))
         tk.Checkbutton(sec_update, text="Check for updates on launch",
                        variable=self.update_check_var, bg=BG2, fg=TEXT, selectcolor=BG3,
                        activebackground=BG2, font=("Consolas", 9)).pack(anchor="w")
         upd_row = tk.Frame(sec_update, bg=BG2); upd_row.pack(fill="x", pady=(4,0))
-        tk.Label(upd_row, text="GitHub repo:", bg=BG2, fg=TEXT, font=("Consolas", 9)).pack(side="left")
+        tk.Label(upd_row, text="GitHub repo:", bg=BG2, fg=SUB, font=("Consolas", 9)).pack(side="left")
         self.update_repo_var = tk.StringVar(value=self.cfg.get("update_repo", ""))
-        tk.Entry(upd_row, textvariable=self.update_repo_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Consolas", 9), width=30,
-                 relief="flat", bd=4).pack(side="left", padx=6)
+        entry_state = "normal" if self._dev_unlocked else "readonly"
+        entry_bg    = BG3 if self._dev_unlocked else BG2
+        entry_fg    = TEXT if self._dev_unlocked else SUB
+        self._repo_entry = tk.Entry(upd_row, textvariable=self.update_repo_var, bg=entry_bg, fg=entry_fg,
+                                     insertbackground=TEXT, font=("Consolas", 9), width=30,
+                                     relief="flat", bd=4, state=entry_state,
+                                     readonlybackground=BG2)
+        self._repo_entry.pack(side="left", padx=6)
         self._btn(upd_row, "Check Now", self._check_for_updates, "#5865F2").pack(side="left", padx=2)
-        tk.Label(sec_update, text="Format: username/repo-name  (e.g. kaiser/kaisers-raid-utility)",
-                 bg=BG2, fg=SUB, font=("Consolas", 7)).pack(anchor="w", pady=(2,0))
+        unlock_row = tk.Frame(sec_update, bg=BG2); unlock_row.pack(fill="x", pady=(4,0))
+        tk.Label(unlock_row, text="🔒 Dev-locked. ", bg=BG2, fg=SUB,
+                 font=("Consolas", 7)).pack(side="left")
+        self._btn(unlock_row, "🔓 Unlock", self._unlock_dev_settings, "#5865F2").pack(side="left", padx=2)
 
-        sec_ntfy = self._section(f, "MOBILE PUSH NOTIFICATIONS  (ntfy.sh — free, no account)")
+        sec_ntfy = self._section(f, "MOBILE PUSH NOTIFICATIONS  🔒")
         self.ntfy_var = tk.BooleanVar(value=self.cfg.get("ntfy_enabled", False))
         tk.Checkbutton(sec_ntfy, text="Enable mobile push notifications on raid",
                        variable=self.ntfy_var, bg=BG2, fg=TEXT, selectcolor=BG3,
                        activebackground=BG2, font=("Consolas", 9)).pack(anchor="w")
         ntfy_row = tk.Frame(sec_ntfy, bg=BG2); ntfy_row.pack(fill="x", pady=(4,0))
-        tk.Label(ntfy_row, text="Channel name:", bg=BG2, fg=TEXT, font=("Consolas", 9)).pack(side="left")
+        tk.Label(ntfy_row, text="Channel:", bg=BG2, fg=SUB, font=("Consolas", 9)).pack(side="left")
         self.ntfy_channel_var = tk.StringVar(value=self.cfg.get("ntfy_channel", ""))
-        tk.Entry(ntfy_row, textvariable=self.ntfy_channel_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Consolas", 9), width=28,
-                 relief="flat", bd=4).pack(side="left", padx=6)
+        self._ntfy_entry = tk.Entry(ntfy_row, textvariable=self.ntfy_channel_var, bg=entry_bg, fg=entry_fg,
+                                     insertbackground=TEXT, font=("Consolas", 9), width=28,
+                                     relief="flat", bd=4, state=entry_state,
+                                     readonlybackground=BG2)
+        self._ntfy_entry.pack(side="left", padx=6)
         self._btn(ntfy_row, "Test", self._test_ntfy, "#5865F2").pack(side="left", padx=2)
-        tk.Label(sec_ntfy, text="1) Install ntfy app on phone  2) Pick a unique channel name e.g. fistborn-kaiser-xyz  3) Subscribe to that channel in the app",
+        tk.Label(sec_ntfy, text="🔒 Dev-locked channel. Subscribe to it in the ntfy app to receive raid alerts.",
                  bg=BG2, fg=SUB, font=("Consolas", 7), wraplength=500, justify="left").pack(anchor="w", pady=(4,0))
 
         # ── CONFIG PROFILES ───────────────────────────────────────────────────
@@ -1279,7 +1323,7 @@ class RaidBotApp:
     def _quick_setup(self):
         """One-click preset optimised for Fistborn."""
         presets = {
-            "detection_mode": "template",
+            "detection_mode": "template_ocr",
             "template_confidence": 72,
             "scan_interval": 2,
             "cooldown": 30,
@@ -1494,31 +1538,67 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                 pass
 
     def _get_webhooks(self):
-        """Return list of all configured webhook URLs (skipping empty ones)."""
-        urls = []
-        for key in ("webhook_url", "webhook_url_2", "webhook_url_3"):
+        """Return list of (url, description) tuples for all configured webhooks."""
+        entries = []
+        for key, desc_key, default_desc in [
+            ("webhook_url",   "webhook_desc",   "Primary"),
+            ("webhook_url_2", "webhook_desc_2", "Ally #1"),
+            ("webhook_url_3", "webhook_desc_3", "Ally #2"),
+        ]:
             u = (self.cfg.get(key) or "").strip()
             if u:
-                urls.append(u)
-        return urls
+                desc = (self.cfg.get(desc_key) or default_desc).strip() or default_desc
+                entries.append((u, desc))
+        return entries
 
     def _broadcast_discord(self, message=None, screenshot_path=None, embed=None, filename="raid.png"):
-        """Send a Discord message to all configured webhooks. Returns list of (ok, info, msg_id) per webhook."""
+        """Send a Discord message to all configured webhooks."""
         results = []
-        for url in self._get_webhooks():
+        for url, _ in self._get_webhooks():
             try:
                 results.append(send_discord(url, message, screenshot_path, embed=embed, filename=filename))
             except Exception as e:
                 results.append((False, str(e), None))
         return results
 
-    def _check_for_updates(self):
-        """Check GitHub for a newer release. Shows popup if available."""
+    def _check_for_updates(self, silent=False):
+        """Check GitHub for a newer release. Shows popup if available.
+        If silent=False, shows a 'Checking for updates...' popup that dismisses itself."""
         if not self.cfg.get("update_check_enabled", True):
             return
         repo = (self.cfg.get("update_repo") or "").strip()
         if not repo or "/" not in repo:
             return
+
+        # Show "checking" popup if not silent
+        status_popup = None
+        status_label = None
+        if not silent:
+            status_popup = tk.Toplevel(self.root)
+            status_popup.title("Checking for Updates")
+            status_popup.geometry("320x110")
+            status_popup.configure(bg=BG)
+            status_popup.transient(self.root)
+            status_popup.resizable(False, False)
+            tk.Label(status_popup, text="🔄",
+                     bg=BG, fg=ACCENT, font=("Consolas", 20)).pack(pady=(14, 0))
+            status_label = tk.Label(status_popup,
+                                     text="Checking for updates...",
+                                     bg=BG, fg=TEXT, font=("Consolas", 10, "bold"))
+            status_label.pack(pady=4)
+            # Centre the popup
+            status_popup.update_idletasks()
+            x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 160
+            y = self.root.winfo_y() + (self.root.winfo_height() // 2) - 55
+            status_popup.geometry(f"+{x}+{y}")
+
+        def _close_status(msg=None, colour=None):
+            if status_popup and status_popup.winfo_exists():
+                if msg and status_label:
+                    status_label.config(text=msg, fg=colour or TEXT)
+                    status_popup.after(1500, status_popup.destroy)
+                else:
+                    status_popup.destroy()
 
         def _check():
             try:
@@ -1526,10 +1606,12 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                 url = f"https://api.github.com/repos/{repo}/releases/latest"
                 resp = requests.get(url, timeout=10)
                 if resp.status_code != 200:
+                    self.root.after(0, lambda: _close_status("Could not check — no connection", YELLOW))
                     return
                 data = resp.json()
                 remote_ver = data.get("tag_name", "").lstrip("v").strip()
                 if not remote_ver:
+                    self.root.after(0, lambda: _close_status("No releases published yet", SUB))
                     return
                 if self._version_newer(remote_ver, current_ver):
                     changelog = data.get("body", "")[:500] or "No changelog provided."
@@ -1539,10 +1621,15 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                         if asset.get("name", "").lower().endswith(".exe"):
                             download_url = asset.get("browser_download_url", "")
                             break
-                    self.root.after(0, lambda: self._show_update_popup(
+                    self.root.after(0, lambda: _close_status())
+                    self.root.after(200, lambda: self._show_update_popup(
                         remote_ver, current_ver, changelog, download_url, critical))
+                else:
+                    self.root.after(0, lambda: _close_status(f"✅ You're up to date (v{current_ver})", GREEN))
             except Exception as e:
-                self.log(f"Update check failed: {e}", "grey")
+                err = str(e)
+                self.root.after(0, lambda: _close_status(f"Error: {err[:40]}", ACCENT))
+                self.log(f"Update check failed: {err}", "grey")
 
         threading.Thread(target=_check, daemon=True).start()
 
@@ -1606,6 +1693,41 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                       bg=BG3, fg=TEXT, relief="flat",
                       font=("Consolas", 9), width=18).pack(side="left", padx=4)
 
+    def _unlock_dev_settings(self):
+        """Prompt for dev password, if correct unlock GitHub repo and ntfy fields."""
+        import tkinter.simpledialog as sd
+        pw = sd.askstring("Developer Unlock", "Enter developer password:", show="*")
+        if pw is None:
+            return
+        # Hash the entered password and compare
+        import hashlib
+        entered_hash = hashlib.sha256(pw.encode()).hexdigest()
+        # Hash of 131322
+        expected_hash = "69f7920e4e8d36af2eca1aeedff67feecb6ed6c45e4f6c5b5770be8fb7c0f776"
+        if entered_hash == expected_hash:
+            self._dev_unlocked = True
+            self.log("🔓 Developer settings unlocked. Reopen Settings tab to edit.", "green")
+            # Enable the entry widgets if they exist
+            if hasattr(self, '_repo_entry'):
+                self._repo_entry.config(state="normal", bg=BG3, fg=TEXT)
+            if hasattr(self, '_ntfy_entry'):
+                self._ntfy_entry.config(state="normal", bg=BG3, fg=TEXT)
+        else:
+            self.log("❌ Incorrect password.", "red")
+
+    def _show_help_popup(self):
+        """Open the Help tab when user clicks Feeling Stuck."""
+        try:
+            # Find the help tab index by iterating tab texts
+            for i in range(self.nb.index("end")):
+                text = self.nb.tab(i, "text")
+                if "HELP" in text.upper():
+                    self.nb.select(i)
+                    self.log("Opened Help tab — read through for common questions.", "green")
+                    return
+        except Exception:
+            pass
+
     def _toggle_compact(self):
         if not self._compact:
             self._compact = True
@@ -1647,10 +1769,8 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                 self.cfg["selected_window_title"] = self._roblox_windows[i][1]
         compact_combo.bind("<<ComboboxSelected>>", _on_compact_window)
 
-        tk.Label(row1, text="Mode:", bg=BG, fg=SUB, font=("Consolas", 8)).pack(side="left")
-        mode_opts = ["template", "template_ocr", "red_pixels", "text", "both", "all"]
-        ttk.Combobox(row1, textvariable=self.mode_var, values=mode_opts,
-                     state="readonly", width=14, font=("Consolas", 8)).pack(side="left", padx=(3,0))
+        tk.Label(row1, text="Mode: Template+OCR", bg=BG, fg=GREEN,
+                 font=("Consolas", 8)).pack(side="left", padx=(3,0))
 
         # ── Control buttons row ───────────────────────────────────────────────
         row2 = tk.Frame(f, bg=BG); row2.pack(fill="x", padx=8, pady=(4,1))
@@ -1933,6 +2053,9 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
         self.cfg["webhook_url"]           = self._fv_webhook_url.get().strip()
         self.cfg["webhook_url_2"]         = self._fv_webhook_url_2.get().strip()
         self.cfg["webhook_url_3"]         = self._fv_webhook_url_3.get().strip()
+        self.cfg["webhook_desc"]          = self._fv_webhook_desc.get().strip()
+        self.cfg["webhook_desc_2"]        = self._fv_webhook_desc_2.get().strip()
+        self.cfg["webhook_desc_3"]        = self._fv_webhook_desc_3.get().strip()
         self.cfg["discord_message"]       = self._fv_discord_message.get().strip()
         self.cfg["stop_message"]          = self._fv_stop_message.get().strip()
         self.cfg["red_threshold"]         = self._sv_red_threshold.get()
@@ -1954,9 +2077,10 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
         self.cfg["anti_afk_enabled"]      = self.anti_afk_var.get()
         self.cfg["anti_afk_interval"]     = self._sv_anti_afk_interval.get()
         self.cfg["ntfy_enabled"]          = self.ntfy_var.get()
-        self.cfg["ntfy_channel"]          = self.ntfy_channel_var.get().strip()
         self.cfg["update_check_enabled"]  = self.update_check_var.get()
-        self.cfg["update_repo"]           = self.update_repo_var.get().strip()
+        if self._dev_unlocked:
+            self.cfg["update_repo"]       = self.update_repo_var.get().strip()
+            self.cfg["ntfy_channel"]      = self.ntfy_channel_var.get().strip()
         self.cfg["raid_text_keywords"]    = [k.strip() for k in self.kw_var.get().split(",") if k.strip()]
         self.cfg["sound_style"]           = self.sound_style_var.get()
         self.cfg["scheduled_enabled"]     = self.sched_var.get()
@@ -2398,9 +2522,13 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                 "timestamp": ts_iso,
             }
             sent = 0
-            for url in webhooks:
+            for url, desc in webhooks:
                 ok, info, msg_id = send_discord(url, self.cfg["discord_message"], screenshot_path, embed=embed)
-                if ok: sent += 1
+                if ok:
+                    sent += 1
+                    self.log(f"  → sent to {desc}", "green")
+                else:
+                    self.log(f"  → FAILED {desc}: {info}", "red")
                 if msg_id:
                     self._session_message_ids.append(msg_id)
             self.log(f"Discord: raid alert sent to {sent}/{len(webhooks)} webhook(s)",
@@ -2426,7 +2554,7 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                         "footer": {"text": "TYPE://KAISERS Raid Utility V1 Alpha"},
                         "timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
                     }
-                    for url in webhooks:
+                    for url, desc in webhooks:
                         ok2, info2, msg_id2 = send_discord(url, None, lb_path, embed=lb_embed, filename="leaderboard.png")
                         if msg_id2:
                             self._session_message_ids.append(msg_id2)
