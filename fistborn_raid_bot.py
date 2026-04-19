@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.2.8"
+APP_VERSION = "1.2.9"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -528,19 +528,63 @@ def fetch_roblox_presence(user_id, cookie, debug=False):
     """
     if not REQUESTS_AVAILABLE or not user_id or not cookie:
         return None
+
+    # Sanitise cookie: strip whitespace, newlines, and surrounding quotes
+    cookie = cookie.strip().strip('"').strip("'").strip()
+    # Handle URL-encoding if present
+    if "%7C" in cookie or "%3A" in cookie:
+        import urllib.parse
+        cookie = urllib.parse.unquote(cookie)
+
     try:
-        resp = requests.post(
+        session = requests.Session()
+        session.cookies.set(".ROBLOSECURITY", cookie, domain=".roblox.com")
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": "https://www.roblox.com",
+            "Referer": "https://www.roblox.com/",
+        }
+
+        # First verify the cookie works by hitting a simple authenticated endpoint
+        # If this fails, the cookie is bad and we bail early
+        auth_check = session.get(
+            "https://users.roblox.com/v1/users/authenticated",
+            headers=headers,
+            timeout=10,
+        )
+        if auth_check.status_code == 401:
+            return {"error": "cookie is invalid or expired - re-copy from browser",
+                    "placeId": None,
+                    "raw": "401 unauthorised on /v1/users/authenticated" if debug else None}
+        if auth_check.status_code != 200:
+            return {"error": f"cookie check failed HTTP {auth_check.status_code}",
+                    "placeId": None,
+                    "raw": auth_check.text[:200] if debug else None}
+        auth_me = auth_check.json()
+        auth_user_id = auth_me.get("id")
+
+        # Get a CSRF token for the POST request
+        csrf_resp = session.post(
+            "https://auth.roblox.com/v2/logout",
+            headers=headers,
+            timeout=10,
+        )
+        csrf_token = csrf_resp.headers.get("x-csrf-token", "")
+        if csrf_token:
+            headers["x-csrf-token"] = csrf_token
+
+        # Now query presence
+        resp = session.post(
             "https://presence.roblox.com/v1/presence/users",
             json={"userIds": [int(user_id)]},
-            cookies={".ROBLOSECURITY": cookie.strip()},
-            headers={
-                "User-Agent": "Mozilla/5.0 RaidBot",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             timeout=10,
         )
         if resp.status_code != 200:
-            return {"error": f"HTTP {resp.status_code} - check cookie is valid",
+            return {"error": f"presence HTTP {resp.status_code}",
                     "placeId": None,
                     "raw": resp.text[:300] if debug else None}
         data = resp.json()
@@ -554,32 +598,38 @@ def fetch_roblox_presence(user_id, cookie, debug=False):
         place_id = p.get("placeId")
         game_id = p.get("gameId")
 
-        # User not in a game at all
         if user_presence_type != 2:
             return {
                 "error": "user not in a game",
                 "placeId": None,
                 "userPresenceType": user_presence_type,
                 "raw": str(p)[:300] if debug else None,
+                "auth_user_id": auth_user_id,
             }
 
-        # In game but Roblox didn't return placeId - privacy settings issue
         if not place_id:
+            # Authenticated but placeId still hidden
+            # This happens if you're querying a user who isn't you AND has privacy restrictions
+            msg = "placeId hidden by Roblox."
+            if auth_user_id and str(auth_user_id) != str(user_id):
+                msg += (f" Cookie owner is user ID {auth_user_id} but you queried {user_id}. "
+                        "For full data, query a user that your cookie owns OR that is friends with the cookie owner.")
+            else:
+                msg += " Even with owner cookie - check if you're in a private/reserved server."
             return {
-                "error": ("presence says in-game but placeId is hidden - "
-                          "likely a privacy issue or cookie doesn't own this account"),
+                "error": msg,
                 "placeId": None,
                 "userPresenceType": user_presence_type,
                 "raw": str(p)[:300] if debug else None,
+                "auth_user_id": auth_user_id,
             }
 
-        # We have placeId. gameId (jobId) is the specific server.
         if game_id:
             join_link = f"https://www.roblox.com/games/start?placeId={place_id}&gameInstanceId={game_id}"
             link_quality = "full (specific server)"
         else:
             join_link = f"https://www.roblox.com/games/{place_id}"
-            link_quality = "partial (game only, not specific server)"
+            link_quality = "partial (game only)"
 
         return {
             "placeId": place_id,
@@ -588,6 +638,7 @@ def fetch_roblox_presence(user_id, cookie, debug=False):
             "link_quality": link_quality,
             "userPresenceType": user_presence_type,
             "error": None,
+            "auth_user_id": auth_user_id,
             "raw": str(p)[:300] if debug else None,
         }
     except Exception as e:
@@ -1546,6 +1597,15 @@ class RaidBotApp:
             if not result:
                 self.log("❌ Fetch failed completely (no response).", "red")
                 return
+            # Show who the cookie actually belongs to
+            if result.get("auth_user_id"):
+                self.log(f"   Cookie is logged in as user ID: {result['auth_user_id']}",
+                         "green" if str(result['auth_user_id']) == str(uid) else "yellow")
+                if str(result.get('auth_user_id', '')) != str(uid):
+                    self.log(f"   ⚠ WARNING: Cookie owner ({result['auth_user_id']}) != queried user ({uid})",
+                             "yellow")
+                    self.log(f"   Put {result['auth_user_id']} as your Roblox User ID in settings.",
+                             "yellow")
             # Always show the raw response for debugging
             if result.get("raw"):
                 self.log(f"   Raw API response: {result['raw']}", "white")
