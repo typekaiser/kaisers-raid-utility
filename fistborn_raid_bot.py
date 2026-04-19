@@ -96,7 +96,7 @@ DEFAULT_CONFIG = {
     "webhook_desc_2": "Ally #1",
     "webhook_desc_3": "Ally #2",
     "discord_message": "<@&870791568200704030> <@&870791620910538783> <@&1454940232712454297> RAID DETECTED! Join the server in the screenshot below or click the link below: https://www.roblox.com/users/9405149316/profile",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "update_check_enabled": True,
     "update_repo": "typekaiser/kaisers-raid-utility",
     "clip_enabled": True,
@@ -1694,26 +1694,74 @@ TYPE://KAISERS RAID UTILITY — QUICK GUIDE
                       font=("Consolas", 9), width=18).pack(side="left", padx=4)
 
     def _unlock_dev_settings(self):
-        """Prompt for dev password, if correct unlock GitHub repo and ntfy fields."""
-        import tkinter.simpledialog as sd
-        pw = sd.askstring("Developer Unlock", "Enter developer password:", show="*")
-        if pw is None:
-            return
-        # Hash the entered password and compare
-        import hashlib
-        entered_hash = hashlib.sha256(pw.encode()).hexdigest()
-        # Hash of 131322
-        expected_hash = "69f7920e4e8d36af2eca1aeedff67feecb6ed6c45e4f6c5b5770be8fb7c0f776"
-        if entered_hash == expected_hash:
-            self._dev_unlocked = True
-            self.log("🔓 Developer settings unlocked. Reopen Settings tab to edit.", "green")
-            # Enable the entry widgets if they exist
-            if hasattr(self, '_repo_entry'):
-                self._repo_entry.config(state="normal", bg=BG3, fg=TEXT)
-            if hasattr(self, '_ntfy_entry'):
-                self._ntfy_entry.config(state="normal", bg=BG3, fg=TEXT)
-        else:
-            self.log("❌ Incorrect password.", "red")
+        """Prompt for dev password via custom popup, unlock dev fields if correct."""
+        popup = tk.Toplevel(self.root)
+        popup.title("Developer Unlock")
+        popup.geometry("340x180")
+        popup.configure(bg=BG)
+        popup.transient(self.root)
+        popup.grab_set()
+        popup.resizable(False, False)
+
+        # Centre
+        popup.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 170
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - 90
+        popup.geometry(f"+{x}+{y}")
+
+        tk.Label(popup, text="🔒  Developer Unlock",
+                 bg=BG, fg=ACCENT, font=("Consolas", 12, "bold")).pack(pady=(14, 4))
+        tk.Label(popup, text="Enter developer password:",
+                 bg=BG, fg=TEXT, font=("Consolas", 9)).pack(pady=(4, 6))
+
+        pw_var = tk.StringVar()
+        entry = tk.Entry(popup, textvariable=pw_var, show="•",
+                         bg=BG3, fg=TEXT, insertbackground=TEXT,
+                         font=("Consolas", 11), width=20,
+                         relief="flat", bd=4, justify="center")
+        entry.pack(pady=4)
+        entry.focus_set()
+
+        status_lbl = tk.Label(popup, text="", bg=BG, fg=ACCENT,
+                              font=("Consolas", 8))
+        status_lbl.pack(pady=2)
+
+        def _try_unlock(*_):
+            import hashlib
+            entered_hash = hashlib.sha256(pw_var.get().encode()).hexdigest()
+            expected_hash = "b570307df9d4f111e678602156f2a715d9e0fae0dcc2e4be7aa2032022c40a8c"
+            if entered_hash == expected_hash:
+                self._dev_unlocked = True
+                self.log("🔓 Developer settings unlocked.", "green")
+                if hasattr(self, '_repo_entry'):
+                    try:
+                        self._repo_entry.config(state="normal",
+                                                 readonlybackground=BG3, bg=BG3, fg=TEXT)
+                    except Exception:
+                        pass
+                if hasattr(self, '_ntfy_entry'):
+                    try:
+                        self._ntfy_entry.config(state="normal",
+                                                 readonlybackground=BG3, bg=BG3, fg=TEXT)
+                    except Exception:
+                        pass
+                status_lbl.config(text="✅ Unlocked!", fg=GREEN)
+                popup.after(800, popup.destroy)
+            else:
+                status_lbl.config(text="❌ Wrong password", fg=ACCENT)
+                pw_var.set("")
+                entry.focus_set()
+
+        btn_row = tk.Frame(popup, bg=BG); btn_row.pack(pady=6)
+        tk.Button(btn_row, text="Unlock", command=_try_unlock,
+                  bg=GREEN, fg="white", relief="flat",
+                  font=("Consolas", 9, "bold"), width=10, cursor="hand2").pack(side="left", padx=4)
+        tk.Button(btn_row, text="Cancel", command=popup.destroy,
+                  bg=BG3, fg=TEXT, relief="flat",
+                  font=("Consolas", 9), width=10, cursor="hand2").pack(side="left", padx=4)
+
+        # Enter key triggers unlock
+        entry.bind("<Return>", _try_unlock)
 
     def _show_help_popup(self):
         """Open the Help tab when user clicks Feeling Stuck."""
