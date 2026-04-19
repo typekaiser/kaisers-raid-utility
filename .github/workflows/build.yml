@@ -1,0 +1,32 @@
+name: Build EXE
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller requests Pillow pywin32 opencv-python mss pytesseract keyboard numpy
+
+      - name: Build EXE
+        run: pyinstaller --onefile --windowed --name "FistbornRaidAlarm" --add-data "banner_template.png;." fistborn_raid_bot.py
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/FistbornRaidAlarm.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
