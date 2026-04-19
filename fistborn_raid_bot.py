@@ -96,7 +96,7 @@ DEFAULT_CONFIG = {
     "webhook_desc_2": "Ally #1",
     "webhook_desc_3": "Ally #2",
     "discord_message": "<@&870791568200704030> <@&870791620910538783> <@&1454940232712454297> RAID DETECTED! Join the server in the screenshot below or click the link below: https://www.roblox.com/users/9405149316/profile",
-    "version": "1.2.2",
+    "version": "1.2.3",
     "update_check_enabled": True,
     "update_repo": "typekaiser/kaisers-raid-utility",
     "clip_enabled": True,
@@ -299,7 +299,7 @@ def pick_scan_zone(on_done):
     canvas.create_text(
         mw // 2, 50,
         text="Drag to draw scan zone  |  ESC to cancel",
-        fill="white", font=("Consolas", 18, "bold")
+        fill="white", font=("Segoe UI", 18, "bold")
     )
 
     start = [0, 0]
@@ -327,7 +327,7 @@ def pick_scan_zone(on_done):
         info_id[0] = canvas.create_text(
             e.x + 10, e.y + 10,
             text=f"{w}x{h}",
-            fill="white", font=("Consolas", 11), anchor="nw"
+            fill="white", font=("Segoe UI", 12), anchor="nw"
         )
 
     def on_release(e):
@@ -683,20 +683,20 @@ class RaidBotApp:
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
         tk.Label(hdr, text="TYPE://KAISERS RAID UTILITY V1 ALPHA",
-                 bg=ACCENT, fg="white", font=("Consolas", 13, "bold")).pack(side="left", padx=14)
+                 bg=ACCENT, fg="white", font=("Segoe UI", 14, "bold")).pack(side="left", padx=14)
         self.status_lbl = tk.Label(hdr, text="  OFFLINE", bg=ACCENT, fg="white",
-                                    font=("Consolas", 10, "bold"))
+                                    font=("Segoe UI", 11, "bold"))
         self.status_lbl.pack(side="right", padx=14)
         self._compact = False
         tk.Button(hdr, text="⊡", bg=ACCENT, fg="white", relief="flat",
-                  font=("Consolas", 12), cursor="hand2",
+                  font=("Segoe UI", 13), cursor="hand2",
                   command=self._toggle_compact).pack(side="right", padx=4)
 
         style = ttk.Style()
         style.theme_use("default")
         style.configure("TNotebook", background=BG, borderwidth=0)
         style.configure("TNotebook.Tab", background=BG3, foreground=TEXT,
-                        padding=[12, 5], font=("Consolas", 9))
+                        padding=[12, 5], font=("Segoe UI", 10))
         style.map("TNotebook.Tab",
                   background=[("selected", ACCENT)],
                   foreground=[("selected", "white")])
@@ -754,47 +754,47 @@ class RaidBotApp:
         banner_inner = tk.Frame(self.watch_frame, bg=BG3, pady=14)
         banner_inner.pack(fill="x")
         self.watch_dot = tk.Label(banner_inner, text="⬤", bg=BG3, fg=SUB,
-                                   font=("Consolas", 18))
+                                   font=("Segoe UI", 18, "bold"))
         self.watch_dot.pack(side="left", padx=(16, 8))
         self.watch_lbl = tk.Label(banner_inner, text="Bot is offline",
-                                   bg=BG3, fg=SUB, font=("Consolas", 14, "bold"))
+                                   bg=BG3, fg=SUB, font=("Segoe UI", 15, "bold"))
         self.watch_lbl.pack(side="left")
         # "Feeling Stuck?" button - always visible in the top banner
         stuck_btn = tk.Button(banner_inner, text="❓ Feeling Stuck?",
                               bg=YELLOW, fg=BG, relief="flat",
-                              font=("Consolas", 9, "bold"), cursor="hand2",
+                              font=("Segoe UI", 10, "bold"), cursor="hand2",
                               command=self._show_help_popup)
         stuck_btn.pack(side="right", padx=(4, 16))
         self.watch_scan_lbl = tk.Label(banner_inner, text="",
-                                        bg=BG3, fg=SUB, font=("Consolas", 9))
+                                        bg=BG3, fg=SUB, font=("Segoe UI", 10))
         self.watch_scan_lbl.pack(side="right", padx=4)
 
         # ══ BIG MAIN CONTROL BUTTONS ═══════════════════════════════════════════
         ctrl = tk.Frame(f, bg=BG); ctrl.pack(fill="x", padx=8, pady=(2, 6))
         self.start_btn = tk.Button(ctrl, text="▶  START BOT",
                                     bg=GREEN, fg="white", relief="flat",
-                                    font=("Consolas", 12, "bold"),
+                                    font=("Segoe UI", 13, "bold"),
                                     cursor="hand2", pady=10,
                                     command=self._start)
         self.start_btn.pack(side="left", fill="x", expand=True, padx=(0, 3))
 
         self.stop_btn = tk.Button(ctrl, text="■ STOP",
                                    bg=ACCENT, fg="white", relief="flat",
-                                   font=("Consolas", 11, "bold"),
+                                   font=("Segoe UI", 12, "bold"),
                                    cursor="hand2", pady=10, state="disabled",
                                    command=self._stop)
         self.stop_btn.pack(side="left", fill="x", expand=True, padx=3)
 
         self.pause_btn = tk.Button(ctrl, text="⏸ PAUSE",
                                     bg=YELLOW, fg=BG, relief="flat",
-                                    font=("Consolas", 11, "bold"),
+                                    font=("Segoe UI", 12, "bold"),
                                     cursor="hand2", pady=10, state="disabled",
                                     command=self._pause)
         self.pause_btn.pack(side="left", fill="x", expand=True, padx=3)
 
         tk.Button(ctrl, text="🚨 PING NOW",
                   bg="#ff4400", fg="white", relief="flat",
-                  font=("Consolas", 11, "bold"),
+                  font=("Segoe UI", 12, "bold"),
                   cursor="hand2", pady=10,
                   command=self._manual_alert).pack(side="left", fill="x", expand=True, padx=(3, 0))
 
@@ -803,7 +803,7 @@ class RaidBotApp:
         row = tk.Frame(sec, bg=BG2); row.pack(fill="x", pady=(0,4))
         self.window_var = tk.StringVar()
         self.window_combo = ttk.Combobox(row, textvariable=self.window_var,
-                                          state="readonly", width=42, font=("Consolas", 9))
+                                          state="readonly", width=42, font=("Segoe UI", 10))
         self.window_combo.pack(side="left", padx=(0,6), fill="x", expand=True)
         self.window_combo.bind("<<ComboboxSelected>>", self._on_window_select)
         self._btn(row, "🔄 Refresh", self._refresh_windows, ACCENT).pack(side="left")
@@ -819,21 +819,21 @@ class RaidBotApp:
         cd_frame = tk.Frame(f, bg=BG2); cd_frame.pack(fill="x", padx=8, pady=4)
         cd_inner = tk.Frame(cd_frame, bg=BG2, pady=4); cd_inner.pack(fill="x", padx=8)
         tk.Label(cd_inner, text="Cooldown", bg=BG2, fg=SUB,
-                 font=("Consolas", 8)).pack(side="left")
+                 font=("Segoe UI", 9)).pack(side="left")
         self.cd_bar = ttk.Progressbar(cd_inner, orient="horizontal",
                                        mode="determinate", maximum=100, value=0)
         self.cd_bar.pack(side="left", fill="x", expand=True, padx=8)
         self.cd_label = tk.Label(cd_inner, text="Ready", bg=BG2, fg=GREEN,
-                                  font=("Consolas", 8), width=10)
+                                  font=("Segoe UI", 9), width=10)
         self.cd_label.pack(side="left")
 
         # ══ PREVIEW ═══════════════════════════════════════════════════════════
         prev_frame = tk.Frame(f, bg=BG2); prev_frame.pack(fill="both", expand=True, padx=8, pady=4)
         tk.Label(prev_frame, text="📹 LIVE SCAN PREVIEW",
-                 bg=BG2, fg=SUB, font=("Consolas", 8, "bold")).pack(anchor="w", padx=6, pady=(4,0))
+                 bg=BG2, fg=SUB, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=6, pady=(4,0))
         self.preview_lbl = tk.Label(prev_frame, bg="#111",
                                     text="No preview yet - start the bot", fg=SUB,
-                                    font=("Consolas", 9))
+                                    font=("Segoe UI", 10))
         self.preview_lbl.pack(padx=6, pady=(2, 6), fill="both", expand=True)
 
         # ══ ADVANCED TOGGLE ═══════════════════════════════════════════════════
@@ -841,7 +841,7 @@ class RaidBotApp:
         self._adv_expanded = tk.BooleanVar(value=False)
         self._adv_toggle_btn = tk.Button(adv_header, text="▸ Show Advanced Options",
                                           bg=BG, fg=SUB, relief="flat",
-                                          font=("Consolas", 8), cursor="hand2",
+                                          font=("Segoe UI", 9), cursor="hand2",
                                           command=self._toggle_advanced)
         self._adv_toggle_btn.pack(anchor="w")
 
@@ -851,14 +851,14 @@ class RaidBotApp:
         sec2 = self._section(self._adv_container, "DETECTION MODE")
         self.mode_var = tk.StringVar(value="template_ocr")
         tk.Label(sec2, text="Template Match + OCR (only supported mode)",
-                 bg=BG2, fg=GREEN, font=("Consolas", 9, "bold")).pack(anchor="w")
+                 bg=BG2, fg=GREEN, font=("Segoe UI", 10, "bold")).pack(anchor="w")
         tk.Label(sec2, text="Scans for the raid banner image, falls back to OCR text detection as backup.",
-                 bg=BG2, fg=SUB, font=("Consolas", 8), wraplength=500, justify="left").pack(anchor="w", pady=(2,0))
+                 bg=BG2, fg=SUB, font=("Segoe UI", 9), wraplength=500, justify="left").pack(anchor="w", pady=(2,0))
         tpl_row = tk.Frame(sec2, bg=BG2); tpl_row.pack(fill="x", pady=(4,0))
         tpl_exists = os.path.exists(TEMPLATE_FILE)
         self.tpl_lbl = tk.Label(tpl_row,
             text=f"{'✓ banner_template.png loaded' if tpl_exists else '✗ banner_template.png not found'}",
-            bg=BG2, fg=GREEN if tpl_exists else ACCENT, font=("Consolas", 8))
+            bg=BG2, fg=GREEN if tpl_exists else ACCENT, font=("Segoe UI", 9))
         self.tpl_lbl.pack(side="left")
 
         # Window options
@@ -866,19 +866,19 @@ class RaidBotApp:
         self.show_all_var = tk.BooleanVar(value=False)
         tk.Checkbutton(sec_opts, text="Show ALL windows (if Roblox not found)",
                        variable=self.show_all_var, bg=BG2, fg=YELLOW, selectcolor=BG3,
-                       activebackground=BG2, font=("Consolas", 9),
+                       activebackground=BG2, font=("Segoe UI", 10),
                        command=self._refresh_windows).pack(anchor="w")
         self.topmost_var = tk.BooleanVar(value=self.cfg["pin_roblox_topmost"])
         tk.Checkbutton(sec_opts, text="Pin selected window always-on-top",
                        variable=self.topmost_var, bg=BG2, fg=TEXT, selectcolor=BG3,
-                       activebackground=BG2, font=("Consolas", 9),
+                       activebackground=BG2, font=("Segoe UI", 10),
                        command=self._apply_topmost).pack(anchor="w")
 
         # Scan zone
         sec_zone = self._section(self._adv_container, "SCAN ZONE")
         zrow = tk.Frame(sec_zone, bg=BG2); zrow.pack(fill="x", pady=(0,4))
         self.zone_lbl = tk.Label(zrow, text="Full window (no zone set)",
-                                  bg=BG2, fg=SUB, font=("Consolas", 9), anchor="w")
+                                  bg=BG2, fg=SUB, font=("Segoe UI", 10), anchor="w")
         self.zone_lbl.pack(side="left", expand=True, fill="x")
         self._btn(zrow, "Draw Zone", self._pick_zone, ACCENT).pack(side="left", padx=2)
         self._btn(zrow, "Clear", self._clear_zone, BG3).pack(side="left", padx=2)
@@ -886,7 +886,7 @@ class RaidBotApp:
         self.cal_btn = self._btn(cal_row, "Auto-Calibrate", self._auto_calibrate, YELLOW)
         self.cal_btn.pack(side="left")
         self.cal_lbl = tk.Label(cal_row, text="  Samples baseline red to set optimal threshold",
-                                 bg=BG2, fg=SUB, font=("Consolas", 8))
+                                 bg=BG2, fg=SUB, font=("Segoe UI", 9))
         self.cal_lbl.pack(side="left", padx=6)
 
     def _toggle_advanced(self):
@@ -905,12 +905,12 @@ class RaidBotApp:
         card.pack(side="left", fill="x", expand=True, padx=2)
         inner = tk.Frame(card, bg=BG2, pady=6); inner.pack(fill="both", expand=True)
         tk.Label(inner, text=icon, bg=BG2, fg=ACCENT,
-                 font=("Consolas", 13)).pack()
+                 font=("Segoe UI", 14)).pack()
         val_lbl = tk.Label(inner, text=value, bg=BG2, fg=TEXT,
-                            font=("Consolas", 12, "bold"))
+                            font=("Segoe UI", 13, "bold"))
         val_lbl.pack()
         tk.Label(inner, text=label, bg=BG2, fg=SUB,
-                 font=("Consolas", 7)).pack()
+                 font=("Segoe UI", 8)).pack()
         setattr(self, attr, val_lbl)
 
     # ── SETTINGS TAB ─────────────────────────────────────────────────────────
@@ -956,7 +956,7 @@ class RaidBotApp:
         # Live webhook status indicator
         wh_row = tk.Frame(sec, bg=BG2); wh_row.pack(fill="x", pady=(4,0))
         self._wh_status = tk.Label(wh_row, text="● Not tested", bg=BG2, fg=SUB,
-                                   font=("Consolas", 8))
+                                   font=("Segoe UI", 9))
         self._wh_status.pack(side="left")
         self._btn(wh_row, "Test Webhook", self._test_webhook, "#5865F2").pack(side="left", padx=6)
         self._btn(wh_row, "📋 Paste URL", self._paste_webhook, BG3).pack(side="left", padx=2)
@@ -973,17 +973,17 @@ class RaidBotApp:
         sec3 = self._section(f, "TEXT KEYWORDS  (comma separated)")
         self.kw_var = tk.StringVar(value=", ".join(self.cfg["raid_text_keywords"]))
         tk.Entry(sec3, textvariable=self.kw_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Consolas", 9), width=44,
+                 insertbackground=TEXT, font=("Segoe UI", 10), width=44,
                  relief="flat", bd=4).pack(anchor="w")
 
         # ── ALERT SOUND ───────────────────────────────────────────────────────
         sec_snd = self._section(f, "ALERT SOUND")
         snd_row = tk.Frame(sec_snd, bg=BG2); snd_row.pack(fill="x")
-        tk.Label(snd_row, text="Sound style:", bg=BG2, fg=TEXT, font=("Consolas", 9)).pack(side="left")
+        tk.Label(snd_row, text="Sound style:", bg=BG2, fg=TEXT, font=("Segoe UI", 10)).pack(side="left")
         self.sound_style_var = tk.StringVar(value=self.cfg.get("sound_style", "beep"))
         sound_cb = ttk.Combobox(snd_row, textvariable=self.sound_style_var,
                                 values=["beep", "alarm", "pulse", "none"],
-                                state="readonly", width=10, font=("Consolas", 9))
+                                state="readonly", width=10, font=("Segoe UI", 10))
         sound_cb.pack(side="left", padx=6)
         self._btn(snd_row, "Preview", self._preview_sound, SUB).pack(side="left")
 
@@ -1005,7 +1005,7 @@ class RaidBotApp:
         ]:
             tk.Checkbutton(sec4, text=text, variable=var,
                            bg=BG2, fg=TEXT, selectcolor=BG3, activebackground=BG2,
-                           font=("Consolas", 9)).pack(anchor="w")
+                           font=("Segoe UI", 10)).pack(anchor="w")
 
         # ── PAUSE MESSAGE ─────────────────────────────────────────────────────
         sec_stop = self._section(f, "PAUSE MESSAGE")
@@ -1023,97 +1023,97 @@ class RaidBotApp:
         ]:
             tk.Checkbutton(sec5, text=text, variable=var,
                            bg=BG2, fg=TEXT, selectcolor=BG3, activebackground=BG2,
-                           font=("Consolas", 9)).pack(anchor="w")
+                           font=("Segoe UI", 10)).pack(anchor="w")
 
         # ── SCHEDULED HOURS ───────────────────────────────────────────────────
         sec_sched = self._section(f, "SCHEDULED WATCH HOURS  (24h format, e.g. 18-02)")
         self.sched_var = tk.BooleanVar(value=self.cfg.get("scheduled_enabled", False))
         tk.Checkbutton(sec_sched, text="Enable scheduled auto-start/stop",
                        variable=self.sched_var, bg=BG2, fg=TEXT, selectcolor=BG3,
-                       activebackground=BG2, font=("Consolas", 9)).pack(anchor="w")
+                       activebackground=BG2, font=("Segoe UI", 10)).pack(anchor="w")
         sched_row = tk.Frame(sec_sched, bg=BG2); sched_row.pack(fill="x", pady=(4,0))
-        tk.Label(sched_row, text="Start hour:", bg=BG2, fg=TEXT, font=("Consolas", 9)).pack(side="left")
+        tk.Label(sched_row, text="Start hour:", bg=BG2, fg=TEXT, font=("Segoe UI", 10)).pack(side="left")
         self.sched_start_var = tk.StringVar(value=str(self.cfg.get("sched_start_hour", 18)))
         tk.Entry(sched_row, textvariable=self.sched_start_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Consolas", 9), width=4,
+                 insertbackground=TEXT, font=("Segoe UI", 10), width=4,
                  relief="flat", bd=4).pack(side="left", padx=4)
-        tk.Label(sched_row, text="Stop hour:", bg=BG2, fg=TEXT, font=("Consolas", 9)).pack(side="left", padx=(8,0))
+        tk.Label(sched_row, text="Stop hour:", bg=BG2, fg=TEXT, font=("Segoe UI", 10)).pack(side="left", padx=(8,0))
         self.sched_stop_var = tk.StringVar(value=str(self.cfg.get("sched_stop_hour", 2)))
         tk.Entry(sched_row, textvariable=self.sched_stop_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Consolas", 9), width=4,
+                 insertbackground=TEXT, font=("Segoe UI", 10), width=4,
                  relief="flat", bd=4).pack(side="left", padx=4)
 
         # ── HOTKEY ────────────────────────────────────────────────────────────
         sec6 = self._section(f, "HOTKEY  (global - works even in-game)")
         hk_row = tk.Frame(sec6, bg=BG2); hk_row.pack(fill="x")
         tk.Label(hk_row, text="Manual ping key:", bg=BG2, fg=TEXT,
-                 font=("Consolas", 9)).pack(side="left")
+                 font=("Segoe UI", 10)).pack(side="left")
         self.hotkey_var = tk.StringVar(value=self.cfg.get("hotkey", "f8"))
         tk.Entry(hk_row, textvariable=self.hotkey_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Consolas", 9), width=10,
+                 insertbackground=TEXT, font=("Segoe UI", 10), width=10,
                  relief="flat", bd=4).pack(side="left", padx=6)
         tk.Label(hk_row, text="(e.g. f8, ctrl+shift+r)", bg=BG2, fg=SUB,
-                 font=("Consolas", 8)).pack(side="left")
+                 font=("Segoe UI", 9)).pack(side="left")
 
         sec_afk = self._section(f, "ANTI-AFK")
         self.anti_afk_var = tk.BooleanVar(value=self.cfg.get("anti_afk_enabled", False))
         tk.Checkbutton(sec_afk, text="Enable anti-AFK (clicks inside Roblox window periodically)",
                        variable=self.anti_afk_var, bg=BG2, fg=TEXT, selectcolor=BG3,
-                       activebackground=BG2, font=("Consolas", 9)).pack(anchor="w")
+                       activebackground=BG2, font=("Segoe UI", 10)).pack(anchor="w")
         self._slider(sec_afk, "Click interval (sec):", "anti_afk_interval", 60, 600)
 
         sec_update = self._section(f, "AUTO-UPDATE  🔒")
         self.update_check_var = tk.BooleanVar(value=self.cfg.get("update_check_enabled", True))
         tk.Checkbutton(sec_update, text="Check for updates on launch",
                        variable=self.update_check_var, bg=BG2, fg=TEXT, selectcolor=BG3,
-                       activebackground=BG2, font=("Consolas", 9)).pack(anchor="w")
+                       activebackground=BG2, font=("Segoe UI", 10)).pack(anchor="w")
         upd_row = tk.Frame(sec_update, bg=BG2); upd_row.pack(fill="x", pady=(4,0))
-        tk.Label(upd_row, text="GitHub repo:", bg=BG2, fg=SUB, font=("Consolas", 9)).pack(side="left")
+        tk.Label(upd_row, text="GitHub repo:", bg=BG2, fg=SUB, font=("Segoe UI", 10)).pack(side="left")
         self.update_repo_var = tk.StringVar(value=self.cfg.get("update_repo", ""))
         entry_state = "normal" if self._dev_unlocked else "readonly"
         entry_bg    = BG3 if self._dev_unlocked else BG2
         entry_fg    = TEXT if self._dev_unlocked else SUB
         self._repo_entry = tk.Entry(upd_row, textvariable=self.update_repo_var, bg=entry_bg, fg=entry_fg,
-                                     insertbackground=TEXT, font=("Consolas", 9), width=30,
+                                     insertbackground=TEXT, font=("Segoe UI", 10), width=30,
                                      relief="flat", bd=4, state=entry_state,
                                      readonlybackground=BG2)
         self._repo_entry.pack(side="left", padx=6)
         self._btn(upd_row, "Check Now", self._check_for_updates, "#5865F2").pack(side="left", padx=2)
         unlock_row = tk.Frame(sec_update, bg=BG2); unlock_row.pack(fill="x", pady=(4,0))
         tk.Label(unlock_row, text="🔒 Dev-locked. ", bg=BG2, fg=SUB,
-                 font=("Consolas", 7)).pack(side="left")
+                 font=("Segoe UI", 8)).pack(side="left")
         self._btn(unlock_row, "🔓 Unlock", self._unlock_dev_settings, "#5865F2").pack(side="left", padx=2)
 
         sec_ntfy = self._section(f, "MOBILE PUSH NOTIFICATIONS  🔒")
         self.ntfy_var = tk.BooleanVar(value=self.cfg.get("ntfy_enabled", False))
         tk.Checkbutton(sec_ntfy, text="Enable mobile push notifications on raid",
                        variable=self.ntfy_var, bg=BG2, fg=TEXT, selectcolor=BG3,
-                       activebackground=BG2, font=("Consolas", 9)).pack(anchor="w")
+                       activebackground=BG2, font=("Segoe UI", 10)).pack(anchor="w")
         ntfy_row = tk.Frame(sec_ntfy, bg=BG2); ntfy_row.pack(fill="x", pady=(4,0))
-        tk.Label(ntfy_row, text="Channel:", bg=BG2, fg=SUB, font=("Consolas", 9)).pack(side="left")
+        tk.Label(ntfy_row, text="Channel:", bg=BG2, fg=SUB, font=("Segoe UI", 10)).pack(side="left")
         self.ntfy_channel_var = tk.StringVar(value=self.cfg.get("ntfy_channel", ""))
         self._ntfy_entry = tk.Entry(ntfy_row, textvariable=self.ntfy_channel_var, bg=entry_bg, fg=entry_fg,
-                                     insertbackground=TEXT, font=("Consolas", 9), width=28,
+                                     insertbackground=TEXT, font=("Segoe UI", 10), width=28,
                                      relief="flat", bd=4, state=entry_state,
                                      readonlybackground=BG2)
         self._ntfy_entry.pack(side="left", padx=6)
         self._btn(ntfy_row, "Test", self._test_ntfy, "#5865F2").pack(side="left", padx=2)
         tk.Label(sec_ntfy, text="🔒 Dev-locked channel. Subscribe to it in the ntfy app to receive raid alerts.",
-                 bg=BG2, fg=SUB, font=("Consolas", 7), wraplength=500, justify="left").pack(anchor="w", pady=(4,0))
+                 bg=BG2, fg=SUB, font=("Segoe UI", 8), wraplength=500, justify="left").pack(anchor="w", pady=(4,0))
 
         # ── CONFIG PROFILES ───────────────────────────────────────────────────
         sec_prof = self._section(f, "CONFIG PROFILES")
         prof_row = tk.Frame(sec_prof, bg=BG2); prof_row.pack(fill="x")
-        tk.Label(prof_row, text="Profile name:", bg=BG2, fg=TEXT, font=("Consolas", 9)).pack(side="left")
+        tk.Label(prof_row, text="Profile name:", bg=BG2, fg=TEXT, font=("Segoe UI", 10)).pack(side="left")
         self.profile_var = tk.StringVar(value=self.cfg.get("active_profile", "default"))
         tk.Entry(prof_row, textvariable=self.profile_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Consolas", 9), width=14,
+                 insertbackground=TEXT, font=("Segoe UI", 10), width=14,
                  relief="flat", bd=4).pack(side="left", padx=6)
         self._btn(prof_row, "Save Profile",  self._save_profile,  GREEN).pack(side="left", padx=2)
         self._btn(prof_row, "Load Profile",  self._load_profile,  "#5865F2").pack(side="left", padx=2)
         self._btn(prof_row, "Delete Profile", self._delete_profile, ACCENT).pack(side="left", padx=2)
         self._profile_list_lbl = tk.Label(sec_prof, text=self._get_profile_names(),
-                                           bg=BG2, fg=SUB, font=("Consolas", 7))
+                                           bg=BG2, fg=SUB, font=("Segoe UI", 8))
         self._profile_list_lbl.pack(anchor="w", pady=(4,0))
 
         # ── BUTTONS ───────────────────────────────────────────────────────────
@@ -1123,7 +1123,7 @@ class RaidBotApp:
         self._btn(btn_row, "Reset to Defaults", self._reset_defaults, SUB).pack(side="left", padx=4)
 
         tk.Label(f, text="─── TEST FUNCTIONS ───", bg=BG, fg=SUB,
-                 font=("Consolas", 8)).pack(pady=(6,2))
+                 font=("Segoe UI", 9)).pack(pady=(6,2))
         test_row = tk.Frame(f, bg=BG); test_row.pack(pady=(0,10))
         self._btn(test_row, "🚨 Test Raid Alert",
                   self._test_alert, "#5865F2", 18).pack(side="left", padx=4)
@@ -1136,14 +1136,14 @@ class RaidBotApp:
 
         top = tk.Frame(f, bg=BG); top.pack(fill="x", padx=8, pady=6)
         tk.Label(top, text="RAID HISTORY", bg=BG, fg=SUB,
-                 font=("Consolas", 8, "bold")).pack(side="left")
+                 font=("Segoe UI", 9, "bold")).pack(side="left")
         self._btn(top, "Refresh Heatmap", self._draw_heatmap, "#5865F2").pack(side="right", padx=2)
         self._btn(top, "Clear History", self._clear_history, BG3).pack(side="right")
 
         # Heatmap canvas
         hm_frame = tk.Frame(f, bg=BG2); hm_frame.pack(fill="x", padx=8, pady=(0,6))
         tk.Label(hm_frame, text="RAID HEATMAP  (days × hours - darker = more raids)",
-                 bg=BG2, fg=SUB, font=("Consolas", 7)).pack(anchor="w", padx=4, pady=(2,0))
+                 bg=BG2, fg=SUB, font=("Segoe UI", 8)).pack(anchor="w", padx=4, pady=(2,0))
         self.heatmap_canvas = tk.Canvas(hm_frame, bg=BG2, height=110, highlightthickness=0)
         self.heatmap_canvas.pack(fill="x", padx=4, pady=4)
 
@@ -1151,9 +1151,9 @@ class RaidBotApp:
         self.history_tree = ttk.Treeview(f, columns=cols, show="headings", height=14)
         style = ttk.Style()
         style.configure("Treeview", background=BG2, fieldbackground=BG2,
-                        foreground=TEXT, font=("Consolas", 9))
+                        foreground=TEXT, font=("Segoe UI", 10))
         style.configure("Treeview.Heading", background=BG3, foreground=TEXT,
-                        font=("Consolas", 9, "bold"))
+                        font=("Segoe UI", 10, "bold"))
         style.map("Treeview", background=[("selected", ACCENT)])
 
         self.history_tree.heading("time",   text="Time")
@@ -1202,14 +1202,14 @@ class RaidBotApp:
         for h in range(24):
             if h % 3 == 0:
                 x = label_w + h * cell_w + cell_w // 2
-                self.heatmap_canvas.create_text(x, 6, text=str(h), fill=SUB, font=("Consolas", 6))
+                self.heatmap_canvas.create_text(x, 6, text=str(h), fill=SUB, font=("Segoe UI", 7))
 
         # Grid
         for d in range(7):
             y = 14 + d * cell_h
             self.heatmap_canvas.create_text(label_w - 6, y + cell_h // 2,
                                             text=days[d], fill=SUB,
-                                            font=("Consolas", 7), anchor="e")
+                                            font=("Segoe UI", 8), anchor="e")
             for h in range(24):
                 x = label_w + h * cell_w
                 count = grid[d][h]
@@ -1231,7 +1231,7 @@ class RaidBotApp:
         f = tk.Frame(nb, bg=BG)
         nb.add(f, text="  📜 LOG  ")
         self.log_box = scrolledtext.ScrolledText(f, bg="#0a0a0a", fg=TEXT,
-                                                  font=("Consolas", 8),
+                                                  font=("Consolas", 9),
                                                   relief="flat", bd=0, state="disabled")
         self.log_box.pack(fill="both", expand=True, padx=4, pady=4)
         for tag, col in [("green", GREEN), ("red", "#ff6b6b"),
@@ -1248,9 +1248,9 @@ class RaidBotApp:
         wiz.transient(self.root)
         wiz.grab_set()
         tk.Label(wiz, text="Welcome to TYPE://KAISERS Raid Utility",
-                 bg=BG, fg=ACCENT, font=("Consolas", 12, "bold")).pack(pady=(14,4))
+                 bg=BG, fg=ACCENT, font=("Segoe UI", 13, "bold")).pack(pady=(14,4))
         tk.Label(wiz, text="Let's get you set up in 3 quick steps.",
-                 bg=BG, fg=SUB, font=("Consolas", 9)).pack()
+                 bg=BG, fg=SUB, font=("Segoe UI", 10)).pack()
 
         step_container = tk.Frame(wiz, bg=BG); step_container.pack(fill="both", expand=True, padx=20, pady=14)
         state = {"step": 0}
@@ -1260,34 +1260,34 @@ class RaidBotApp:
                 w.destroy()
             if state["step"] == 0:
                 tk.Label(step_container, text="STEP 1 - Paste your Discord webhook URL",
-                         bg=BG, fg=TEXT, font=("Consolas", 10, "bold")).pack(anchor="w", pady=(10,4))
+                         bg=BG, fg=TEXT, font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(10,4))
                 tk.Label(step_container, text="In Discord: Server Settings → Integrations → Webhooks → New → Copy URL",
-                         bg=BG, fg=SUB, font=("Consolas", 8), wraplength=440, justify="left").pack(anchor="w", pady=(0,8))
+                         bg=BG, fg=SUB, font=("Segoe UI", 9), wraplength=440, justify="left").pack(anchor="w", pady=(0,8))
                 hook_var = tk.StringVar(value=self.cfg.get("webhook_url", ""))
                 tk.Entry(step_container, textvariable=hook_var, bg=BG3, fg=TEXT,
-                         insertbackground=TEXT, font=("Consolas", 9), width=54,
+                         insertbackground=TEXT, font=("Segoe UI", 10), width=54,
                          relief="flat", bd=4).pack(pady=4)
                 def paste():
                     try: hook_var.set(self.root.clipboard_get())
                     except Exception: pass
                 tk.Button(step_container, text="📋 Paste from Clipboard", command=paste,
-                          bg=BG3, fg=TEXT, relief="flat", font=("Consolas", 9)).pack(pady=4)
+                          bg=BG3, fg=TEXT, relief="flat", font=("Segoe UI", 10)).pack(pady=4)
                 def nxt():
                     self.cfg["webhook_url"] = hook_var.get().strip()
                     state["step"] = 1; render()
                 tk.Button(step_container, text="Next →", command=nxt,
                           bg=ACCENT, fg="white", relief="flat",
-                          font=("Consolas", 9, "bold"), width=12).pack(pady=10)
+                          font=("Segoe UI", 10, "bold"), width=12).pack(pady=10)
             elif state["step"] == 1:
                 tk.Label(step_container, text="STEP 2 - Select your Roblox window",
-                         bg=BG, fg=TEXT, font=("Consolas", 10, "bold")).pack(anchor="w", pady=(10,4))
+                         bg=BG, fg=TEXT, font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(10,4))
                 tk.Label(step_container, text="Make sure Roblox is open first. Click Refresh then pick the right one.",
-                         bg=BG, fg=SUB, font=("Consolas", 8), wraplength=440, justify="left").pack(anchor="w", pady=(0,8))
+                         bg=BG, fg=SUB, font=("Segoe UI", 9), wraplength=440, justify="left").pack(anchor="w", pady=(0,8))
                 self._refresh_windows()
                 labels = [f"[{i+1}] {t}" for i, (_, t) in enumerate(self._roblox_windows)]
                 win_var = tk.StringVar()
                 cb = ttk.Combobox(step_container, textvariable=win_var, values=labels,
-                                   state="readonly", width=50, font=("Consolas", 9))
+                                   state="readonly", width=50, font=("Segoe UI", 10))
                 cb.pack(pady=4)
                 if labels: cb.current(0)
                 def refresh():
@@ -1296,7 +1296,7 @@ class RaidBotApp:
                     cb["values"] = new_labels
                     if new_labels: cb.current(0)
                 tk.Button(step_container, text="🔄 Refresh", command=refresh,
-                          bg=BG3, fg=TEXT, relief="flat", font=("Consolas", 9)).pack(pady=4)
+                          bg=BG3, fg=TEXT, relief="flat", font=("Segoe UI", 10)).pack(pady=4)
                 def nxt():
                     idx = cb.current()
                     if 0 <= idx < len(self._roblox_windows):
@@ -1305,19 +1305,19 @@ class RaidBotApp:
                     state["step"] = 2; render()
                 tk.Button(step_container, text="Next →", command=nxt,
                           bg=ACCENT, fg="white", relief="flat",
-                          font=("Consolas", 9, "bold"), width=12).pack(pady=10)
+                          font=("Segoe UI", 10, "bold"), width=12).pack(pady=10)
             else:
                 tk.Label(step_container, text="STEP 3 - You're all set ✅",
-                         bg=BG, fg=GREEN, font=("Consolas", 11, "bold")).pack(pady=(20,8))
+                         bg=BG, fg=GREEN, font=("Segoe UI", 12, "bold")).pack(pady=(20,8))
                 tk.Label(step_container, text="Click FINISH to close this wizard.\nHit START on the MAIN tab whenever you're ready.",
-                         bg=BG, fg=TEXT, font=("Consolas", 9), justify="center").pack(pady=(0,12))
+                         bg=BG, fg=TEXT, font=("Segoe UI", 10), justify="center").pack(pady=(0,12))
                 def finish():
                     self.cfg["first_launch_done"] = True
                     save_config(self.cfg)
                     wiz.destroy()
                 tk.Button(step_container, text="Finish", command=finish,
                           bg=GREEN, fg="white", relief="flat",
-                          font=("Consolas", 9, "bold"), width=14).pack(pady=10)
+                          font=("Segoe UI", 10, "bold"), width=14).pack(pady=10)
         render()
 
     def _quick_setup(self):
@@ -1375,52 +1375,136 @@ class RaidBotApp:
         f = tk.Frame(nb, bg=BG)
         nb.add(f, text="  ❓ HELP  ")
         help_box = scrolledtext.ScrolledText(f, bg=BG2, fg=TEXT,
-                                              font=("Consolas", 9),
+                                              font=("Segoe UI", 10),
                                               relief="flat", bd=4, wrap="word")
         help_box.pack(fill="both", expand=True, padx=6, pady=6)
         help_box.insert("1.0", """
-TYPE://KAISERS RAID UTILITY - QUICK GUIDE
+TYPE://KAISERS RAID UTILITY - FULL GUIDE
+Made by @_KAISUR_ on Discord. DM if something breaks.
+=========================================================
 
-● MAIN TAB
-  Select the Roblox window you want monitored from the dropdown.
-  Click START to begin watching. STOP to end the session.
-  PAUSE freezes detection but keeps the bot loaded (use when server hopping).
-  MANUAL PING fires a raid alert right now even if nothing was detected.
+BEFORE YOU START - REQUIREMENTS
+---------------------------------
+This bot is designed to run on a SECONDARY WINDOWS PC or via REMOTE DESKTOP (RDP).
+Running it on your main gaming PC will interfere with your mouse and screen.
 
-● DETECTION MODES
-  Template Match (recommended): looks for the raid banner image. Most accurate.
-  Template + OCR: fallback to text reading if template fails.
-  Red Pixels: counts red pixels in the scan zone. Fast but false-positive prone.
-  Text (OCR): reads on-screen text looking for RAID / INVADED / ATTACK.
+What you need:
+  - A secondary Windows PC, laptop, or handheld (like ROG Ally) running 24/7
+  - OR a Remote Desktop connection to a second Windows account on your PC
+  - A Roblox ALT ACCOUNT logged in on that secondary machine
+    (your main account should be free for actual gameplay)
+  - The alt should be in the gang base server at all times while monitoring
+  - Windows 10 or 11 (required for capture to work properly)
+  - A stable internet connection on the monitoring device
 
-● SETTINGS TAB
-  Webhook URL: paste your Discord webhook here.
-  Alert Message: what gets sent with raid alerts (include @role pings here).
-  Detection Tuning: adjust sensitivity if you get false positives or missed raids.
-  Anti-AFK: clicks inside Roblox every N seconds so you don't get kicked.
-  Mobile Push: get phone notifications via ntfy.sh (free, no account).
+Why an alt account?
+  Your main account needs to stay free so you can actually play and defend.
+  The alt sits in the server doing nothing except letting the bot watch for raids.
+  Roblox will AFK-kick after around 20 minutes of inactivity, which is why
+  the Anti-AFK feature exists in Settings.
 
-● HISTORY TAB
-  See every raid logged with time and detection method.
-  Heatmap shows which day and hour raids happen most often.
+Why RDP / secondary device?
+  The bot needs Roblox to be visible (not minimised) to capture screenshots.
+  On RDP, the Roblox window can be "minimised" on your main screen but is
+  still fully rendering on the secondary session. This is the only reliable
+  way to monitor without interfering with your main PC.
 
-● HOTKEY
-  Default F8 - fires a manual raid ping from anywhere, even in-game.
 
-● TEST FUNCTIONS
-  Test Raid Alert: fires a full raid alert without pinging, so you can verify Discord.
-  Test Webhook: sends a quick "connected" ping to your Discord channel.
+FIRST TIME SETUP
+-----------------
+1. Download and run FistbornRaidAlarm.exe
+2. The Setup Wizard will guide you through the basics on first launch
+3. Paste your Discord webhook URL when prompted
+4. Select the Roblox window running on your alt account
+5. Click START and you are done
 
-● PROFILES
-  Save different configurations by name. Useful if you monitor multiple games.
+The bot remembers all your settings between sessions.
+You do not need to reconfigure anything after the first setup.
 
-● COMMON ISSUES
-  "No window selected": click Refresh on MAIN tab and pick your Roblox window.
-  "pip not recognised": Python isn't installed or not added to PATH.
-  False raid alerts: increase Template Confidence or tighten the scan zone.
-  Missed raids: decrease Template Confidence, verify scan zone covers the banner.
 
-● KAISERS RAID BOT MADE BY @_KAISUR_ - HMU ON DISCORD IF SOMETHING BREAKS
+MAIN TAB
+---------
+The big coloured banner at the top shows bot status at a glance:
+  Green = bot is running and watching
+  Yellow = bot is paused
+  Red/grey = bot is offline
+
+Buttons:
+  START - begins raid detection
+  STOP - ends the session and sends a summary to Discord
+  PAUSE - temporarily freezes detection (use when changing servers)
+  PING NOW - manually fires a raid alert right now
+
+Feeling Stuck button - brings you back to this help guide
+
+
+SETTINGS TAB
+-------------
+Webhook URL - your Discord channel webhook (already filled in by default)
+Ally Webhooks - paste webhooks from allied gang servers to alert them too
+Alert Message - the text sent with every raid alert (role pings are included)
+Anti-AFK - clicks inside Roblox every few minutes to prevent getting kicked
+Mobile Push - sends a notification to your phone via the ntfy app (free)
+Auto-Update - checks for new versions automatically when the bot launches
+
+The GitHub repo and ntfy channel are locked. Click the Unlock button and
+enter the developer password if you need to change them.
+
+
+HISTORY TAB
+------------
+Every detected raid is logged here with the time and detection method.
+The heatmap at the top shows which days and hours raids happen most often.
+Use this to figure out when your gang needs to be most alert.
+
+
+HOTKEY
+-------
+Default is F8. Press it from anywhere, even while in-game, to fire a
+manual raid ping without touching the bot window.
+You can change this in Settings.
+
+
+TEST FUNCTIONS (in Settings tab)
+----------------------------------
+Test Raid Alert - fires a full test alert to Discord without pinging anyone.
+                  Use this to confirm your webhook is working.
+Test Webhook - sends a quick connection test message to your Discord channel.
+
+
+COMMON ISSUES
+--------------
+Bot not detecting raids:
+  Make sure the Roblox window is selected in the dropdown on the MAIN tab.
+  Make sure the banner_template.png file is in the same folder as the exe.
+  Try lowering the Template Confidence slider in Settings.
+
+False raid alerts (detecting when there is no raid):
+  Raise the Template Confidence slider in Settings.
+  Draw a tighter Scan Zone around just the raid banner area.
+
+Anti-AFK not working:
+  Make sure "Enable Anti-AFK" is ticked in Settings and the bot is running.
+  The click interval slider controls how often it clicks (default 5 minutes).
+
+Bot resets settings every launch:
+  Make sure the exe is not being run from inside a zip file.
+  Extract it fully before running.
+
+Update popup not appearing:
+  Check your internet connection.
+  Go to Settings and click "Check Now" in the Auto-Update section.
+
+Mobile notifications not working:
+  Install the ntfy app on your phone (iOS and Android, free).
+  Subscribe to the channel shown in Settings under Mobile Push Notifications.
+  Make sure "Enable mobile push notifications" is ticked.
+
+
+CONTACT
+--------
+Discord: @_KAISUR_
+GitHub: https://github.com/typekaiser/kaisers-raid-utility
 """)
         help_box.config(state="disabled")
 
@@ -1581,10 +1665,10 @@ TYPE://KAISERS RAID UTILITY - QUICK GUIDE
             status_popup.transient(self.root)
             status_popup.resizable(False, False)
             tk.Label(status_popup, text="🔄",
-                     bg=BG, fg=ACCENT, font=("Consolas", 20)).pack(pady=(14, 0))
+                     bg=BG, fg=ACCENT, font=("Segoe UI", 20, "bold")).pack(pady=(14, 0))
             status_label = tk.Label(status_popup,
                                      text="Checking for updates...",
-                                     bg=BG, fg=TEXT, font=("Consolas", 10, "bold"))
+                                     bg=BG, fg=TEXT, font=("Segoe UI", 11, "bold"))
             status_label.pack(pady=4)
             # Centre the popup
             status_popup.update_idletasks()
@@ -1654,16 +1738,16 @@ TYPE://KAISERS RAID UTILITY - QUICK GUIDE
             top.grab_set()
 
         tk.Label(top, text="🚀  Update Available!",
-                 bg=BG, fg=ACCENT, font=("Consolas", 13, "bold")).pack(pady=(12,4))
+                 bg=BG, fg=ACCENT, font=("Segoe UI", 14, "bold")).pack(pady=(12,4))
         tk.Label(top, text=f"Current: v{cur_ver}    →    New: v{new_ver}",
-                 bg=BG, fg=TEXT, font=("Consolas", 10)).pack()
+                 bg=BG, fg=TEXT, font=("Segoe UI", 11)).pack()
         if critical:
             tk.Label(top, text="⚠️  CRITICAL UPDATE - highly recommended",
-                     bg=BG, fg=ACCENT, font=("Consolas", 9, "bold")).pack(pady=(4,0))
+                     bg=BG, fg=ACCENT, font=("Segoe UI", 10, "bold")).pack(pady=(4,0))
 
         tk.Label(top, text="What's new:", bg=BG, fg=SUB,
-                 font=("Consolas", 9, "bold")).pack(anchor="w", padx=20, pady=(10,2))
-        cl = scrolledtext.ScrolledText(top, bg=BG2, fg=TEXT, font=("Consolas", 9),
+                 font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=20, pady=(10,2))
+        cl = scrolledtext.ScrolledText(top, bg=BG2, fg=TEXT, font=("Segoe UI", 10),
                                         relief="flat", bd=4, wrap="word", height=10)
         cl.pack(fill="both", expand=True, padx=20)
         cl.insert("1.0", changelog)
@@ -1684,14 +1768,14 @@ TYPE://KAISERS RAID UTILITY - QUICK GUIDE
             top.destroy()
         tk.Button(btn_row, text="Download Update", command=open_download,
                   bg=GREEN, fg="white", relief="flat",
-                  font=("Consolas", 9, "bold"), width=18).pack(side="left", padx=4)
+                  font=("Segoe UI", 10, "bold"), width=18).pack(side="left", padx=4)
         if not critical:
             tk.Button(btn_row, text="Skip This Version", command=skip,
                       bg=BG3, fg=TEXT, relief="flat",
-                      font=("Consolas", 9), width=18).pack(side="left", padx=4)
+                      font=("Segoe UI", 10), width=18).pack(side="left", padx=4)
             tk.Button(btn_row, text="Remind Me Later", command=top.destroy,
                       bg=BG3, fg=TEXT, relief="flat",
-                      font=("Consolas", 9), width=18).pack(side="left", padx=4)
+                      font=("Segoe UI", 10), width=18).pack(side="left", padx=4)
 
     def _unlock_dev_settings(self):
         """Prompt for dev password via custom popup, unlock dev fields if correct."""
@@ -1710,20 +1794,20 @@ TYPE://KAISERS RAID UTILITY - QUICK GUIDE
         popup.geometry(f"+{x}+{y}")
 
         tk.Label(popup, text="🔒  Developer Unlock",
-                 bg=BG, fg=ACCENT, font=("Consolas", 12, "bold")).pack(pady=(14, 4))
+                 bg=BG, fg=ACCENT, font=("Segoe UI", 13, "bold")).pack(pady=(14, 4))
         tk.Label(popup, text="Enter developer password:",
-                 bg=BG, fg=TEXT, font=("Consolas", 9)).pack(pady=(4, 6))
+                 bg=BG, fg=TEXT, font=("Segoe UI", 10)).pack(pady=(4, 6))
 
         pw_var = tk.StringVar()
         entry = tk.Entry(popup, textvariable=pw_var, show="•",
                          bg=BG3, fg=TEXT, insertbackground=TEXT,
-                         font=("Consolas", 11), width=20,
+                         font=("Segoe UI", 12), width=20,
                          relief="flat", bd=4, justify="center")
         entry.pack(pady=4)
         entry.focus_set()
 
         status_lbl = tk.Label(popup, text="", bg=BG, fg=ACCENT,
-                              font=("Consolas", 8))
+                              font=("Segoe UI", 9))
         status_lbl.pack(pady=2)
 
         def _try_unlock(*_):
@@ -1755,10 +1839,10 @@ TYPE://KAISERS RAID UTILITY - QUICK GUIDE
         btn_row = tk.Frame(popup, bg=BG); btn_row.pack(pady=6)
         tk.Button(btn_row, text="Unlock", command=_try_unlock,
                   bg=GREEN, fg="white", relief="flat",
-                  font=("Consolas", 9, "bold"), width=10, cursor="hand2").pack(side="left", padx=4)
+                  font=("Segoe UI", 10, "bold"), width=10, cursor="hand2").pack(side="left", padx=4)
         tk.Button(btn_row, text="Cancel", command=popup.destroy,
                   bg=BG3, fg=TEXT, relief="flat",
-                  font=("Consolas", 9), width=10, cursor="hand2").pack(side="left", padx=4)
+                  font=("Segoe UI", 10), width=10, cursor="hand2").pack(side="left", padx=4)
 
         # Enter key triggers unlock
         entry.bind("<Return>", _try_unlock)
@@ -1800,12 +1884,12 @@ TYPE://KAISERS RAID UTILITY - QUICK GUIDE
         top_row = tk.Frame(f, bg=BG); top_row.pack(fill="x", padx=8, pady=(2,0))
         self._btn(top_row, "↩ Full View", self._toggle_compact, BG3, 10).pack(side="right")
         row1 = tk.Frame(f, bg=BG); row1.pack(fill="x", padx=8, pady=(4,1))
-        tk.Label(row1, text="Win:", bg=BG, fg=SUB, font=("Consolas", 8)).pack(side="left")
+        tk.Label(row1, text="Win:", bg=BG, fg=SUB, font=("Segoe UI", 9)).pack(side="left")
         labels = [f"[{i+1}] {t}" for i, (_, t) in enumerate(self._roblox_windows)]
         self._compact_window_var = tk.StringVar()
         compact_combo = ttk.Combobox(row1, textvariable=self._compact_window_var,
                                      values=labels, state="readonly",
-                                     width=18, font=("Consolas", 8))
+                                     width=18, font=("Segoe UI", 9))
         compact_combo.pack(side="left", padx=(3,6))
         idx = self.window_combo.current()
         if 0 <= idx < len(labels):
@@ -1818,7 +1902,7 @@ TYPE://KAISERS RAID UTILITY - QUICK GUIDE
         compact_combo.bind("<<ComboboxSelected>>", _on_compact_window)
 
         tk.Label(row1, text="Mode: Template+OCR", bg=BG, fg=GREEN,
-                 font=("Consolas", 8)).pack(side="left", padx=(3,0))
+                 font=("Segoe UI", 9)).pack(side="left", padx=(3,0))
 
         # ── Control buttons row ───────────────────────────────────────────────
         row2 = tk.Frame(f, bg=BG); row2.pack(fill="x", padx=8, pady=(4,1))
@@ -1829,39 +1913,39 @@ TYPE://KAISERS RAID UTILITY - QUICK GUIDE
 
         # ── Test buttons row ──────────────────────────────────────────────────
         tk.Label(f, text="TEST FUNCTIONS", bg=BG, fg=SUB,
-                 font=("Consolas", 7)).pack(anchor="w", padx=10, pady=(4,0))
+                 font=("Segoe UI", 8)).pack(anchor="w", padx=10, pady=(4,0))
         row2b = tk.Frame(f, bg=BG); row2b.pack(fill="x", padx=8, pady=(1,2))
         self._btn(row2b, "🚨 Raid", self._test_alert, "#5865F2", 8).pack(side="left", padx=2)
 
         # ── Status bar ────────────────────────────────────────────────────────
         row3 = tk.Frame(f, bg=BG2, pady=3); row3.pack(fill="x", padx=8, pady=(4,1))
-        self._compact_dot = tk.Label(row3, text="⬤", bg=BG2, fg=SUB, font=("Consolas", 9))
+        self._compact_dot = tk.Label(row3, text="⬤", bg=BG2, fg=SUB, font=("Segoe UI", 10))
         self._compact_dot.pack(side="left", padx=(8,4))
         self._compact_status = tk.Label(row3, text="Bot is offline", bg=BG2, fg=SUB,
-                                        font=("Consolas", 8))
+                                        font=("Segoe UI", 9))
         self._compact_status.pack(side="left", expand=True, anchor="w")
         # Cooldown indicator on the right of status bar
-        self._compact_cd_lbl = tk.Label(row3, text="", bg=BG2, fg=SUB, font=("Consolas", 8))
+        self._compact_cd_lbl = tk.Label(row3, text="", bg=BG2, fg=SUB, font=("Segoe UI", 9))
         self._compact_cd_lbl.pack(side="right", padx=8)
 
         # ── Stats row ─────────────────────────────────────────────────────────
         row4 = tk.Frame(f, bg=BG); row4.pack(fill="x", padx=8, pady=(2,1))
         self._compact_alerts_lbl = tk.Label(row4, text="Alerts: 0", bg=BG, fg=TEXT,
-                                            font=("Consolas", 8))
+                                            font=("Segoe UI", 9))
         self._compact_alerts_lbl.pack(side="left", padx=(0,8))
         self._compact_uptime_lbl = tk.Label(row4, text="Uptime: --:--:--", bg=BG, fg=TEXT,
-                                            font=("Consolas", 8))
+                                            font=("Segoe UI", 9))
         self._compact_uptime_lbl.pack(side="left", padx=(0,8))
         self._compact_last_lbl = tk.Label(row4, text="Last: -", bg=BG, fg=SUB,
-                                          font=("Consolas", 8))
+                                          font=("Segoe UI", 9))
         self._compact_last_lbl.pack(side="left", padx=(0,8))
         hk = self.cfg.get("hotkey", "f8").upper()
         tk.Label(row4, text=f"Hotkey: {hk}", bg=BG, fg=SUB,
-                 font=("Consolas", 8)).pack(side="right")
+                 font=("Segoe UI", 9)).pack(side="right")
 
         # ── Live preview ──────────────────────────────────────────────────────
         self._compact_preview = tk.Label(f, bg="#111", text="No preview yet",
-                                         fg=SUB, font=("Consolas", 8))
+                                         fg=SUB, font=("Segoe UI", 9))
         self._compact_preview.pack(fill="x", padx=8, pady=(3,4))
 
         self._compact_update_loop()
@@ -1917,7 +2001,7 @@ TYPE://KAISERS RAID UTILITY - QUICK GUIDE
         outer = tk.Frame(parent, bg=BG)
         outer.pack(fill="x", padx=10, pady=(6,2))
         tk.Label(outer, text=title, bg=BG, fg=SUB,
-                 font=("Consolas", 8, "bold")).pack(anchor="w")
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w")
         inner = tk.Frame(outer, bg=BG2, highlightbackground=BORDER, highlightthickness=1)
         inner.pack(fill="x", pady=(2,0))
         pad = tk.Frame(inner, bg=BG2)
@@ -1929,31 +2013,31 @@ TYPE://KAISERS RAID UTILITY - QUICK GUIDE
         return tk.Button(parent, text=text, command=cmd, bg=colour,
                          fg="white" if colour not in (YELLOW, BG3) else (BG if colour==YELLOW else TEXT),
                          relief="flat", bd=0, cursor="hand2",
-                         font=("Consolas", 9, "bold"), padx=10, pady=5, **kw)
+                         font=("Segoe UI", 10, "bold"), padx=10, pady=5, **kw)
 
     def _stat(self, parent, label, value):
         fr = tk.Frame(parent, bg=BG3, padx=10, pady=6)
         fr.pack(side="left", expand=True, fill="x", padx=3)
-        tk.Label(fr, text=label, bg=BG3, fg=SUB, font=("Consolas", 7)).pack()
-        lbl = tk.Label(fr, text=value, bg=BG3, fg=TEXT, font=("Consolas", 11, "bold"))
+        tk.Label(fr, text=label, bg=BG3, fg=SUB, font=("Segoe UI", 8)).pack()
+        lbl = tk.Label(fr, text=value, bg=BG3, fg=TEXT, font=("Segoe UI", 12, "bold"))
         lbl.pack()
         return lbl
 
     def _field(self, parent, label, key, width=40):
-        tk.Label(parent, text=label, bg=BG2, fg=TEXT, font=("Consolas", 9)).pack(anchor="w")
+        tk.Label(parent, text=label, bg=BG2, fg=TEXT, font=("Segoe UI", 10)).pack(anchor="w")
         var = tk.StringVar(value=self.cfg.get(key, ""))
         setattr(self, f"_fv_{key}", var)
         tk.Entry(parent, textvariable=var, bg=BG3, fg=TEXT, insertbackground=TEXT,
-                 font=("Consolas", 9), width=width, relief="flat", bd=4).pack(anchor="w", pady=(0,6))
+                 font=("Segoe UI", 10), width=width, relief="flat", bd=4).pack(anchor="w", pady=(0,6))
 
     def _slider(self, parent, label, key, lo, hi):
         row = tk.Frame(parent, bg=BG2); row.pack(fill="x", pady=2)
-        tk.Label(row, text=label, bg=BG2, fg=TEXT, font=("Consolas", 9),
+        tk.Label(row, text=label, bg=BG2, fg=TEXT, font=("Segoe UI", 10),
                  width=24, anchor="w").pack(side="left")
         var = tk.IntVar(value=self.cfg.get(key, lo))
         setattr(self, f"_sv_{key}", var)
         tk.Label(row, textvariable=var, bg=BG2, fg="#ff6b6b",
-                 font=("Consolas", 9, "bold"), width=6).pack(side="right")
+                 font=("Segoe UI", 10, "bold"), width=6).pack(side="right")
         tk.Scale(row, from_=lo, to=hi, orient="horizontal", variable=var,
                  bg=BG2, fg=TEXT, troughcolor=BG3, highlightthickness=0,
                  showvalue=False, length=190).pack(side="right")
