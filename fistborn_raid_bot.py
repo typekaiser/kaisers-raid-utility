@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.2.9"
+APP_VERSION = "1.3.0"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -536,29 +536,30 @@ def fetch_roblox_presence(user_id, cookie, debug=False):
         import urllib.parse
         cookie = urllib.parse.unquote(cookie)
 
-    try:
-        session = requests.Session()
-        session.cookies.set(".ROBLOSECURITY", cookie, domain=".roblox.com")
+    # Build a raw Cookie header instead of using requests' cookie jar.
+    # The cookie jar mangles cookies starting with "." which is what Roblox uses.
+    cookie_header = f".ROBLOSECURITY={cookie}"
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
+    try:
+        base_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-GB,en;q=0.9",
             "Origin": "https://www.roblox.com",
             "Referer": "https://www.roblox.com/",
+            "Cookie": cookie_header,
         }
 
-        # First verify the cookie works by hitting a simple authenticated endpoint
-        # If this fails, the cookie is bad and we bail early
-        auth_check = session.get(
+        # First verify the cookie works
+        auth_check = requests.get(
             "https://users.roblox.com/v1/users/authenticated",
-            headers=headers,
+            headers=base_headers,
             timeout=10,
         )
         if auth_check.status_code == 401:
             return {"error": "cookie is invalid or expired - re-copy from browser",
                     "placeId": None,
-                    "raw": "401 unauthorised on /v1/users/authenticated" if debug else None}
+                    "raw": f"401 unauthorised. Response: {auth_check.text[:200]}" if debug else None}
         if auth_check.status_code != 200:
             return {"error": f"cookie check failed HTTP {auth_check.status_code}",
                     "placeId": None,
@@ -566,33 +567,53 @@ def fetch_roblox_presence(user_id, cookie, debug=False):
         auth_me = auth_check.json()
         auth_user_id = auth_me.get("id")
 
-        # Get a CSRF token for the POST request
-        csrf_resp = session.post(
-            "https://auth.roblox.com/v2/logout",
-            headers=headers,
-            timeout=10,
-        )
-        csrf_token = csrf_resp.headers.get("x-csrf-token", "")
-        if csrf_token:
-            headers["x-csrf-token"] = csrf_token
+        # Get a CSRF token by making a throwaway POST that will fail with 403 + token
+        csrf_token = ""
+        try:
+            csrf_resp = requests.post(
+                "https://auth.roblox.com/v2/logout",
+                headers=base_headers,
+                timeout=10,
+            )
+            csrf_token = csrf_resp.headers.get("x-csrf-token", "")
+        except Exception:
+            pass
 
-        # Now query presence
-        resp = session.post(
+        post_headers = dict(base_headers)
+        post_headers["Content-Type"] = "application/json"
+        if csrf_token:
+            post_headers["x-csrf-token"] = csrf_token
+
+        # Query presence
+        resp = requests.post(
             "https://presence.roblox.com/v1/presence/users",
             json={"userIds": [int(user_id)]},
-            headers=headers,
+            headers=post_headers,
             timeout=10,
         )
+
+        # If we got a 403 about CSRF, retry with the new token
+        if resp.status_code == 403 and "x-csrf-token" in resp.headers:
+            post_headers["x-csrf-token"] = resp.headers["x-csrf-token"]
+            resp = requests.post(
+                "https://presence.roblox.com/v1/presence/users",
+                json={"userIds": [int(user_id)]},
+                headers=post_headers,
+                timeout=10,
+            )
+
         if resp.status_code != 200:
             return {"error": f"presence HTTP {resp.status_code}",
                     "placeId": None,
-                    "raw": resp.text[:300] if debug else None}
+                    "raw": resp.text[:300] if debug else None,
+                    "auth_user_id": auth_user_id}
         data = resp.json()
         arr = data.get("userPresences", [])
         if not arr:
             return {"error": "no presence data returned",
                     "placeId": None,
-                    "raw": str(data)[:300] if debug else None}
+                    "raw": str(data)[:300] if debug else None,
+                    "auth_user_id": auth_user_id}
         p = arr[0]
         user_presence_type = p.get("userPresenceType", 0)
         place_id = p.get("placeId")
@@ -608,14 +629,12 @@ def fetch_roblox_presence(user_id, cookie, debug=False):
             }
 
         if not place_id:
-            # Authenticated but placeId still hidden
-            # This happens if you're querying a user who isn't you AND has privacy restrictions
             msg = "placeId hidden by Roblox."
             if auth_user_id and str(auth_user_id) != str(user_id):
                 msg += (f" Cookie owner is user ID {auth_user_id} but you queried {user_id}. "
-                        "For full data, query a user that your cookie owns OR that is friends with the cookie owner.")
+                        "Query a user your cookie owns.")
             else:
-                msg += " Even with owner cookie - check if you're in a private/reserved server."
+                msg += " Check if you're in a reserved/private server."
             return {
                 "error": msg,
                 "placeId": None,
