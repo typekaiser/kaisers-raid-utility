@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.2.6"
+APP_VERSION = "1.2.7"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -529,7 +529,6 @@ def fetch_roblox_presence(user_id, cookie):
     if not REQUESTS_AVAILABLE or not user_id or not cookie:
         return None
     try:
-        # Roblox presence API needs a POST with user IDs
         resp = requests.post(
             "https://presence.roblox.com/v1/presence/users",
             json={"userIds": [int(user_id)]},
@@ -541,32 +540,50 @@ def fetch_roblox_presence(user_id, cookie):
             timeout=10,
         )
         if resp.status_code != 200:
-            return {"error": f"HTTP {resp.status_code}", "placeId": None}
+            return {"error": f"HTTP {resp.status_code} - check cookie is valid",
+                    "placeId": None}
         data = resp.json()
         arr = data.get("userPresences", [])
         if not arr:
-            return {"error": "no presence data", "placeId": None}
+            return {"error": "no presence data returned",
+                    "placeId": None}
         p = arr[0]
         user_presence_type = p.get("userPresenceType", 0)
         place_id = p.get("placeId")
-        game_id = p.get("gameId")  # this is the jobId
-        if user_presence_type != 2 or not place_id:
-            # Not in a game
+        game_id = p.get("gameId")
+
+        # User not in a game at all
+        if user_presence_type != 2:
             return {
                 "error": "user not in a game",
                 "placeId": None,
                 "userPresenceType": user_presence_type,
             }
-        # Build the join link - RoPro and Roblox deep links both work with this format
+
+        # In game but Roblox didn't return placeId - privacy settings issue
+        if not place_id:
+            return {
+                "error": ("presence says in-game but placeId is hidden - "
+                          "check your alt's Privacy Settings. Set 'Who can see when I'm online' "
+                          "and 'Who can see what I'm playing' to Everyone."),
+                "placeId": None,
+                "userPresenceType": user_presence_type,
+            }
+
+        # We have placeId. gameId (jobId) is the specific server.
+        # Without gameId we can only link to the game, not the specific server.
         if game_id:
             join_link = f"https://www.roblox.com/games/start?placeId={place_id}&gameInstanceId={game_id}"
+            link_quality = "full (specific server)"
         else:
-            # Fallback: public game link (not specific to your server)
             join_link = f"https://www.roblox.com/games/{place_id}"
+            link_quality = "partial (game only, not specific server - privacy setting hides jobId)"
+
         return {
             "placeId": place_id,
             "gameId": game_id,
             "join_link": join_link,
+            "link_quality": link_quality,
             "userPresenceType": user_presence_type,
             "error": None,
         }
@@ -1527,18 +1544,30 @@ class RaidBotApp:
                 self.log("❌ Fetch failed completely (no response).", "red")
                 return
             if result.get("error"):
-                self.log(f"❌ Fetch error: {result['error']}", "red")
+                self.log(f"❌ {result['error']}", "red")
                 if result.get("userPresenceType") is not None:
-                    status_map = {0: "Offline", 1: "Online (website)", 2: "In-Game", 3: "In-Studio"}
+                    status_map = {0: "Offline", 1: "Online (website)",
+                                  2: "In-Game", 3: "In-Studio"}
                     s = status_map.get(result["userPresenceType"], "Unknown")
-                    self.log(f"   User is currently: {s}", "yellow")
+                    self.log(f"   Detected status: {s}", "yellow")
+                # If we got In-Game but no placeId, show the privacy fix steps
+                if result.get("userPresenceType") == 2 and not result.get("placeId"):
+                    self.log("   ── FIX ──", "yellow")
+                    self.log("   1) Log into your ALT on roblox.com", "yellow")
+                    self.log("   2) Settings → Privacy", "yellow")
+                    self.log("   3) Set 'Who can see what I'm playing' to Everyone", "yellow")
+                    self.log("   4) Save, then retry here", "yellow")
                 return
-            self.log(f"✅ User is in game. placeId={result['placeId']} gameId={result['gameId']}", "green")
-            self.log(f"   Join link: {result['join_link']}", "green")
+            self.log(f"✅ SUCCESS - {result.get('link_quality', 'link built')}", "green")
+            self.log(f"   placeId: {result['placeId']}", "green")
+            self.log(f"   gameId:  {result.get('gameId') or '(missing - privacy)'}",
+                     "green" if result.get('gameId') else "yellow")
+            self.log(f"   Link:    {result['join_link']}", "green")
             # Save as manual fallback too
             self.cfg["server_join_link"] = result["join_link"]
             self.join_link_var.set(result["join_link"])
             save_config(self.cfg)
+            self.log("   ✓ Saved as fallback link.", "green")
         threading.Thread(target=_run, daemon=True).start()
 
     def _paste_webhook(self):
