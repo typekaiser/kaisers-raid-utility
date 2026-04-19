@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -976,13 +976,18 @@ class RaidBotApp:
                   cursor="hand2", pady=10,
                   command=self._manual_alert).pack(side="left", fill="x", expand=True, padx=(3, 0))
 
-        # Quick-access row for server link (for when you server hop)
+        # Quick-access row for server link and testing
         join_row = tk.Frame(f, bg=BG); join_row.pack(fill="x", padx=8, pady=(0, 6))
-        tk.Button(join_row, text="🎯 Update Server Join Link (paste from clipboard)",
+        tk.Button(join_row, text="🎯 Update Server Link",
                   bg="#5865F2", fg="white", relief="flat",
                   font=("Segoe UI", 10, "bold"),
                   cursor="hand2", pady=6,
-                  command=self._quick_update_join_link).pack(fill="x")
+                  command=self._quick_update_join_link).pack(side="left", fill="x", expand=True, padx=(0,3))
+        tk.Button(join_row, text="🧪 Fire Test Alert",
+                  bg=YELLOW, fg=BG, relief="flat",
+                  font=("Segoe UI", 10, "bold"),
+                  cursor="hand2", pady=6,
+                  command=self._test_alert).pack(side="left", fill="x", expand=True, padx=(3,0))
 
         # ══ ROBLOX WINDOW - simplified ═════════════════════════════════════════
         sec = self._section(f, "🎮  STEP 1 - Pick your Roblox window")
