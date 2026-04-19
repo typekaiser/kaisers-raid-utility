@@ -68,13 +68,31 @@ except Exception:
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 import sys as _sys
-# When running as a PyInstaller exe, __file__ points to a temp folder that gets
-# wiped on every launch. We need a persistent location for config/history/screenshots.
+# Config and data MUST persist across exe locations. Use %APPDATA% on Windows
+# so if the user downloads a new exe to Downloads or wherever, it still finds
+# the config from the old one. The exe itself can live anywhere.
 if getattr(_sys, "frozen", False):
-    # Running as compiled exe - use the folder the exe lives in
-    _BASE = os.path.dirname(os.path.abspath(_sys.executable))
+    # Running as compiled exe - use %APPDATA%\FistbornRaidAlarm
+    _APPDATA = os.environ.get("APPDATA") or os.path.expanduser("~")
+    _BASE = os.path.join(_APPDATA, "FistbornRaidAlarm")
+    os.makedirs(_BASE, exist_ok=True)
+    # Migrate legacy config from exe folder if AppData doesn't have one yet
+    _LEGACY_BASE = os.path.dirname(os.path.abspath(_sys.executable))
+    _legacy_cfg = os.path.join(_LEGACY_BASE, "raid_bot_config.json")
+    _new_cfg = os.path.join(_BASE, "raid_bot_config.json")
+    if os.path.exists(_legacy_cfg) and not os.path.exists(_new_cfg):
+        try:
+            import shutil as _shutil
+            _shutil.copy2(_legacy_cfg, _new_cfg)
+            # Also migrate history file if present
+            _legacy_hist = os.path.join(_LEGACY_BASE, "raid_history.json")
+            _new_hist = os.path.join(_BASE, "raid_history.json")
+            if os.path.exists(_legacy_hist) and not os.path.exists(_new_hist):
+                _shutil.copy2(_legacy_hist, _new_hist)
+        except Exception:
+            pass
 else:
-    # Running as a Python script - use the script folder
+    # Running as Python script - use script folder (dev convenience)
     _BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE     = os.path.join(_BASE, "raid_bot_config.json")
 SCREENSHOTS_DIR = os.path.join(_BASE, "raid_screenshots")
@@ -98,7 +116,10 @@ DEFAULT_CONFIG = {
     "discord_message": "<@&870791568200704030> <@&870791620910538783> <@&1454940232712454297> RAID DETECTED! Join the server in the screenshot below or click the link below: https://www.roblox.com/users/9405149316/profile",
     "server_join_link": "",
     "join_link_enabled": True,
-    "version": "1.2.4",
+    "roblox_cookie": "",
+    "roblox_user_id": "9405149316",
+    "auto_fetch_join_link": True,
+    "version": "1.2.5",
     "update_check_enabled": True,
     "update_repo": "typekaiser/kaisers-raid-utility",
     "clip_enabled": True,
@@ -486,6 +507,65 @@ def send_ntfy(channel, title, message, priority="high"):
         return resp.status_code in (200, 201)
     except Exception:
         return False
+
+
+def fetch_roblox_presence(user_id, cookie):
+    """Query Roblox presence API for a user's current server.
+
+    Returns dict with keys: placeId, gameId (jobId), join_link, status
+    Returns None if not in a game, cookie invalid, or any error.
+    Status codes:
+      0 = Offline
+      1 = Online (website)
+      2 = InGame (this is what we want)
+      3 = InStudio
+    """
+    if not REQUESTS_AVAILABLE or not user_id or not cookie:
+        return None
+    try:
+        # Roblox presence API needs a POST with user IDs
+        resp = requests.post(
+            "https://presence.roblox.com/v1/presence/users",
+            json={"userIds": [int(user_id)]},
+            cookies={".ROBLOSECURITY": cookie.strip()},
+            headers={
+                "User-Agent": "Mozilla/5.0 RaidBot",
+                "Content-Type": "application/json",
+            },
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return {"error": f"HTTP {resp.status_code}", "placeId": None}
+        data = resp.json()
+        arr = data.get("userPresences", [])
+        if not arr:
+            return {"error": "no presence data", "placeId": None}
+        p = arr[0]
+        user_presence_type = p.get("userPresenceType", 0)
+        place_id = p.get("placeId")
+        game_id = p.get("gameId")  # this is the jobId
+        if user_presence_type != 2 or not place_id:
+            # Not in a game
+            return {
+                "error": "user not in a game",
+                "placeId": None,
+                "userPresenceType": user_presence_type,
+            }
+        # Build the join link - RoPro and Roblox deep links both work with this format
+        if game_id:
+            join_link = f"https://www.roblox.com/games/start?placeId={place_id}&gameInstanceId={game_id}"
+        else:
+            # Fallback: public game link (not specific to your server)
+            join_link = f"https://www.roblox.com/games/{place_id}"
+        return {
+            "placeId": place_id,
+            "gameId": game_id,
+            "join_link": join_link,
+            "userPresenceType": user_presence_type,
+            "error": None,
+        }
+    except Exception as e:
+        return {"error": str(e), "placeId": None}
 
 
 def send_discord(webhook_url, message=None, screenshot_path=None, embed=None, filename="raid.png"):
@@ -973,30 +1053,70 @@ class RaidBotApp:
         self._btn(wh_row, "⚡ Quick Setup", self._quick_setup, GREEN).pack(side="left", padx=2)
 
         # ── QUICK JOIN LINK (RoPro / Direct Roblox join) ──────────────────────
-        sec_join = self._section(f, "🎯 QUICK JOIN LINK  (RoPro one-click-join)")
+        sec_join = self._section(f, "🎯 QUICK JOIN LINK  (Auto-fetch from Roblox)")
         self.join_enabled_var = tk.BooleanVar(value=self.cfg.get("join_link_enabled", True))
         tk.Checkbutton(sec_join, text="Include join link in Discord raid alerts",
                        variable=self.join_enabled_var, bg=BG2, fg=TEXT, selectcolor=BG3,
                        activebackground=BG2, font=("Segoe UI", 10)).pack(anchor="w")
 
-        jl_row = tk.Frame(sec_join, bg=BG2); jl_row.pack(fill="x", pady=(4, 0))
-        tk.Label(jl_row, text="Server Link:", bg=BG2, fg=TEXT,
+        self.auto_fetch_var = tk.BooleanVar(value=self.cfg.get("auto_fetch_join_link", True))
+        tk.Checkbutton(sec_join, text="🔄 Auto-fetch current server link on every raid (requires cookie below)",
+                       variable=self.auto_fetch_var, bg=BG2, fg=GREEN, selectcolor=BG3,
+                       activebackground=BG2, font=("Segoe UI", 10)).pack(anchor="w")
+
+        # Roblox user ID (non-sensitive, editable)
+        uid_row = tk.Frame(sec_join, bg=BG2); uid_row.pack(fill="x", pady=(6, 0))
+        tk.Label(uid_row, text="Roblox User ID:", bg=BG2, fg=TEXT,
                  font=("Segoe UI", 10)).pack(side="left")
+        self.roblox_uid_var = tk.StringVar(value=self.cfg.get("roblox_user_id", ""))
+        tk.Entry(uid_row, textvariable=self.roblox_uid_var, bg=BG3, fg=TEXT,
+                 insertbackground=TEXT, font=("Consolas", 9), width=18,
+                 relief="flat", bd=4).pack(side="left", padx=6)
+        tk.Label(uid_row, text="(your alt's numeric ID from their profile URL)",
+                 bg=BG2, fg=SUB, font=("Segoe UI", 8)).pack(side="left", padx=4)
+
+        # Cookie (dev-locked, sensitive)
+        ck_row = tk.Frame(sec_join, bg=BG2); ck_row.pack(fill="x", pady=(6, 0))
+        tk.Label(ck_row, text=".ROBLOSECURITY Cookie:", bg=BG2, fg=SUB,
+                 font=("Segoe UI", 10)).pack(side="left")
+        self.cookie_var = tk.StringVar(value=self.cfg.get("roblox_cookie", ""))
+        entry_state_ck = "normal" if getattr(self, "_dev_unlocked", False) else "readonly"
+        entry_bg_ck    = BG3 if getattr(self, "_dev_unlocked", False) else BG2
+        entry_fg_ck    = TEXT if getattr(self, "_dev_unlocked", False) else SUB
+        self._cookie_entry = tk.Entry(ck_row, textvariable=self.cookie_var, bg=entry_bg_ck, fg=entry_fg_ck,
+                                       insertbackground=TEXT, font=("Consolas", 9), width=40,
+                                       relief="flat", bd=4, show="•",
+                                       state=entry_state_ck, readonlybackground=BG2)
+        self._cookie_entry.pack(side="left", padx=6, fill="x", expand=True)
+
+        ck_btn_row = tk.Frame(sec_join, bg=BG2); ck_btn_row.pack(fill="x", pady=(4, 0))
+        self._btn(ck_btn_row, "🧪 Test Fetch", self._test_presence_fetch, GREEN).pack(side="left", padx=2)
+        self._btn(ck_btn_row, "❌ Clear Cookie", self._clear_cookie, BG3).pack(side="left", padx=2)
+        tk.Label(ck_btn_row, text="🔒 Cookie field is dev-locked. Hit Unlock below to edit.",
+                 bg=BG2, fg=SUB, font=("Segoe UI", 8)).pack(side="left", padx=4)
+
+        # Manual fallback link
+        jl_row = tk.Frame(sec_join, bg=BG2); jl_row.pack(fill="x", pady=(8, 0))
+        tk.Label(jl_row, text="Manual Link (fallback):", bg=BG2, fg=TEXT,
+                 font=("Segoe UI", 9)).pack(side="left")
         self.join_link_var = tk.StringVar(value=self.cfg.get("server_join_link", ""))
         tk.Entry(jl_row, textvariable=self.join_link_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Consolas", 9), width=46,
+                 insertbackground=TEXT, font=("Consolas", 9), width=40,
                  relief="flat", bd=4).pack(side="left", padx=6, fill="x", expand=True)
 
         btn_row = tk.Frame(sec_join, bg=BG2); btn_row.pack(fill="x", pady=(4, 0))
-        self._btn(btn_row, "📋 Paste from Clipboard", self._paste_join_link, "#5865F2").pack(side="left", padx=2)
+        self._btn(btn_row, "📋 Paste Fallback", self._paste_join_link, "#5865F2").pack(side="left", padx=2)
         self._btn(btn_row, "❌ Clear", self._clear_join_link, BG3).pack(side="left", padx=2)
 
         tk.Label(sec_join,
-                 text="Paste once per server. Updates for all future raid alerts until you change it.\n"
-                      "Get the link by right-clicking the RoPro Join button in your browser or copying\n"
-                      "the link from a RoPro server share. Works with any roblox:// deep link too.",
+                 text="How auto-fetch works: Bot queries Roblox using your cookie to find which server your user ID is in, "
+                      "builds the join link, and drops it in every raid alert. Link is always current even if you server hop.\n\n"
+                      "How to get your cookie: 1) Log into your ALT account in a browser  "
+                      "2) Press F12 to open DevTools  3) Application tab → Cookies → roblox.com  "
+                      "4) Copy the Value field of '.ROBLOSECURITY'  5) Unlock dev settings and paste here.\n\n"
+                      "Cookie stays on your PC only. Never uploaded or logged anywhere.",
                  bg=BG2, fg=SUB, font=("Segoe UI", 8),
-                 wraplength=520, justify="left").pack(anchor="w", pady=(4, 0))
+                 wraplength=520, justify="left").pack(anchor="w", pady=(6, 0))
 
         # ── DETECTION TUNING ──────────────────────────────────────────────────
         sec2 = self._section(f, "DETECTION TUNING")
@@ -1374,6 +1494,47 @@ class RaidBotApp:
         save_config(self.cfg)
         self.log("Quick Setup applied - recommended Fistborn settings loaded.", "green")
 
+    def _clear_cookie(self):
+        """Clear the stored Roblox cookie."""
+        if not getattr(self, "_dev_unlocked", False):
+            self.log("🔒 Dev-locked. Unlock first to modify cookie.", "yellow")
+            return
+        self.cookie_var.set("")
+        self.cfg["roblox_cookie"] = ""
+        save_config(self.cfg)
+        self.log("Cookie cleared. Auto-fetch will now be disabled until cookie is added back.", "yellow")
+
+    def _test_presence_fetch(self):
+        """Test that cookie + user ID can fetch current server."""
+        uid = self.roblox_uid_var.get().strip()
+        cookie = self.cookie_var.get().strip()
+        if not uid:
+            self.log("❌ No user ID set. Fill in the Roblox User ID field.", "red")
+            return
+        if not cookie:
+            self.log("❌ No cookie set. Unlock dev settings and paste the cookie first.", "red")
+            return
+        self.log("🔄 Testing presence fetch...", "white")
+        def _run():
+            result = fetch_roblox_presence(uid, cookie)
+            if not result:
+                self.log("❌ Fetch failed completely (no response).", "red")
+                return
+            if result.get("error"):
+                self.log(f"❌ Fetch error: {result['error']}", "red")
+                if result.get("userPresenceType") is not None:
+                    status_map = {0: "Offline", 1: "Online (website)", 2: "In-Game", 3: "In-Studio"}
+                    s = status_map.get(result["userPresenceType"], "Unknown")
+                    self.log(f"   User is currently: {s}", "yellow")
+                return
+            self.log(f"✅ User is in game. placeId={result['placeId']} gameId={result['gameId']}", "green")
+            self.log(f"   Join link: {result['join_link']}", "green")
+            # Save as manual fallback too
+            self.cfg["server_join_link"] = result["join_link"]
+            self.join_link_var.set(result["join_link"])
+            save_config(self.cfg)
+        threading.Thread(target=_run, daemon=True).start()
+
     def _paste_webhook(self):
         try:
             text = self.root.clipboard_get().strip()
@@ -1534,15 +1695,33 @@ The GitHub repo and ntfy channel are locked. Click the Unlock button and
 enter the developer password if you need to change them.
 
 
-QUICK JOIN LINK (RoPro)
-------------------------
-When your bot is in a server, copy the RoPro "Join" link from your browser
-(or any direct roblox:// link) and paste it into the bot via the button on
-the MAIN tab. Every raid alert from then on will include a clickable
-"One-Click Join" field in Discord so your gang can jump in instantly.
+QUICK JOIN LINK (RoPro Auto-Fetch)
+------------------------------------
+The bot can automatically fetch your alt's current server link on every
+raid alert, so the Discord alert always has a clickable "Join" button
+pointing at the server your bot is actually in.
 
-When you change servers, just hit the "Update Server Join Link" button on
-the main tab and paste the new link. Takes 2 seconds.
+To enable auto-fetch:
+1. Go to Settings and find the "QUICK JOIN LINK" section
+2. Enter your alt account's Roblox User ID (the number in their profile URL)
+3. Click the Unlock button and enter the dev password (131322)
+4. Get your .ROBLOSECURITY cookie from your browser:
+   - Log into your alt account in Chrome or Firefox
+   - Press F12 to open Developer Tools
+   - Application tab -> Cookies -> roblox.com
+   - Copy the "Value" of the ".ROBLOSECURITY" cookie
+5. Paste the cookie into the dev-locked field
+6. Hit Save Settings then click "Test Fetch" to verify
+7. Tick "Auto-fetch current server link on every raid"
+
+From this point on, every raid alert has the correct server link
+automatically, no matter how many servers you hop through.
+
+The cookie stays 100% on your PC. Never sent to Discord, never logged,
+never uploaded anywhere. It's stored locally in your config.
+
+If you prefer not to use a cookie, leave it blank and paste manual links
+into the "Manual Link (fallback)" field whenever you change servers.
 
 
 HISTORY TAB
@@ -1923,6 +2102,12 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                                                  readonlybackground=BG3, bg=BG3, fg=TEXT)
                     except Exception:
                         pass
+                if hasattr(self, '_cookie_entry'):
+                    try:
+                        self._cookie_entry.config(state="normal",
+                                                   readonlybackground=BG3, bg=BG3, fg=TEXT)
+                    except Exception:
+                        pass
                 status_lbl.config(text="✅ Unlocked!", fg=GREEN)
                 popup.after(800, popup.destroy)
             else:
@@ -2285,6 +2470,10 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
         self.cfg["discord_message"]       = self._fv_discord_message.get().strip()
         self.cfg["server_join_link"]      = self.join_link_var.get().strip()
         self.cfg["join_link_enabled"]     = self.join_enabled_var.get()
+        self.cfg["auto_fetch_join_link"]  = self.auto_fetch_var.get()
+        self.cfg["roblox_user_id"]        = self.roblox_uid_var.get().strip()
+        if getattr(self, "_dev_unlocked", False):
+            self.cfg["roblox_cookie"]     = self.cookie_var.get().strip()
         self.cfg["stop_message"]          = self._fv_stop_message.get().strip()
         self.cfg["red_threshold"]         = self._sv_red_threshold.get()
         self.cfg["template_confidence"]   = self._sv_template_confidence.get()
@@ -2751,6 +2940,23 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
             }
             # Add join link as a prominent field if set
             join_link = (self.cfg.get("server_join_link") or "").strip()
+            # Try auto-fetch first if enabled and cookie present
+            if self.cfg.get("auto_fetch_join_link", True) and self.cfg.get("join_link_enabled", True):
+                uid    = (self.cfg.get("roblox_user_id") or "").strip()
+                cookie = (self.cfg.get("roblox_cookie") or "").strip()
+                if uid and cookie:
+                    self.log("🔄 Auto-fetching current server link...", "white")
+                    try:
+                        fetched = fetch_roblox_presence(uid, cookie)
+                        if fetched and fetched.get("join_link") and not fetched.get("error"):
+                            join_link = fetched["join_link"]
+                            self.log(f"   ✓ Got live server link", "green")
+                        else:
+                            err = (fetched or {}).get("error", "no response")
+                            self.log(f"   ⚠ Auto-fetch failed ({err}), using fallback link",
+                                     "yellow")
+                    except Exception as e:
+                        self.log(f"   ⚠ Auto-fetch error: {e}, using fallback link", "yellow")
             if join_link and self.cfg.get("join_link_enabled", True):
                 embed["fields"].append({
                     "name": "🎯 One-Click Join",
