@@ -96,7 +96,9 @@ DEFAULT_CONFIG = {
     "webhook_desc_2": "Ally #1",
     "webhook_desc_3": "Ally #2",
     "discord_message": "<@&870791568200704030> <@&870791620910538783> <@&1454940232712454297> RAID DETECTED! Join the server in the screenshot below or click the link below: https://www.roblox.com/users/9405149316/profile",
-    "version": "1.2.3",
+    "server_join_link": "",
+    "join_link_enabled": True,
+    "version": "1.2.4",
     "update_check_enabled": True,
     "update_repo": "typekaiser/kaisers-raid-utility",
     "clip_enabled": True,
@@ -798,6 +800,14 @@ class RaidBotApp:
                   cursor="hand2", pady=10,
                   command=self._manual_alert).pack(side="left", fill="x", expand=True, padx=(3, 0))
 
+        # Quick-access row for server link (for when you server hop)
+        join_row = tk.Frame(f, bg=BG); join_row.pack(fill="x", padx=8, pady=(0, 6))
+        tk.Button(join_row, text="🎯 Update Server Join Link (paste from clipboard)",
+                  bg="#5865F2", fg="white", relief="flat",
+                  font=("Segoe UI", 10, "bold"),
+                  cursor="hand2", pady=6,
+                  command=self._quick_update_join_link).pack(fill="x")
+
         # ══ ROBLOX WINDOW - simplified ═════════════════════════════════════════
         sec = self._section(f, "🎮  STEP 1 - Pick your Roblox window")
         row = tk.Frame(sec, bg=BG2); row.pack(fill="x", pady=(0,4))
@@ -961,6 +971,32 @@ class RaidBotApp:
         self._btn(wh_row, "Test Webhook", self._test_webhook, "#5865F2").pack(side="left", padx=6)
         self._btn(wh_row, "📋 Paste URL", self._paste_webhook, BG3).pack(side="left", padx=2)
         self._btn(wh_row, "⚡ Quick Setup", self._quick_setup, GREEN).pack(side="left", padx=2)
+
+        # ── QUICK JOIN LINK (RoPro / Direct Roblox join) ──────────────────────
+        sec_join = self._section(f, "🎯 QUICK JOIN LINK  (RoPro one-click-join)")
+        self.join_enabled_var = tk.BooleanVar(value=self.cfg.get("join_link_enabled", True))
+        tk.Checkbutton(sec_join, text="Include join link in Discord raid alerts",
+                       variable=self.join_enabled_var, bg=BG2, fg=TEXT, selectcolor=BG3,
+                       activebackground=BG2, font=("Segoe UI", 10)).pack(anchor="w")
+
+        jl_row = tk.Frame(sec_join, bg=BG2); jl_row.pack(fill="x", pady=(4, 0))
+        tk.Label(jl_row, text="Server Link:", bg=BG2, fg=TEXT,
+                 font=("Segoe UI", 10)).pack(side="left")
+        self.join_link_var = tk.StringVar(value=self.cfg.get("server_join_link", ""))
+        tk.Entry(jl_row, textvariable=self.join_link_var, bg=BG3, fg=TEXT,
+                 insertbackground=TEXT, font=("Consolas", 9), width=46,
+                 relief="flat", bd=4).pack(side="left", padx=6, fill="x", expand=True)
+
+        btn_row = tk.Frame(sec_join, bg=BG2); btn_row.pack(fill="x", pady=(4, 0))
+        self._btn(btn_row, "📋 Paste from Clipboard", self._paste_join_link, "#5865F2").pack(side="left", padx=2)
+        self._btn(btn_row, "❌ Clear", self._clear_join_link, BG3).pack(side="left", padx=2)
+
+        tk.Label(sec_join,
+                 text="Paste once per server. Updates for all future raid alerts until you change it.\n"
+                      "Get the link by right-clicking the RoPro Join button in your browser or copying\n"
+                      "the link from a RoPro server share. Works with any roblox:// deep link too.",
+                 bg=BG2, fg=SUB, font=("Segoe UI", 8),
+                 wraplength=520, justify="left").pack(anchor="w", pady=(4, 0))
 
         # ── DETECTION TUNING ──────────────────────────────────────────────────
         sec2 = self._section(f, "DETECTION TUNING")
@@ -1349,6 +1385,51 @@ class RaidBotApp:
         except Exception:
             self.log("Could not read clipboard.", "yellow")
 
+    def _paste_join_link(self):
+        """Grab a join link from the clipboard and save it."""
+        try:
+            text = self.root.clipboard_get().strip()
+            if not text:
+                self.log("Clipboard is empty.", "yellow")
+                return
+            # Basic validation - must look like a Roblox URL or deep link
+            lower = text.lower()
+            if not any(k in lower for k in ("roblox.com", "roblox://", "games/start", "ropro")):
+                self.log(f"That doesn't look like a Roblox join link: {text[:60]}", "yellow")
+                return
+            self.join_link_var.set(text)
+            self.cfg["server_join_link"] = text
+            save_config(self.cfg)
+            self.log(f"✓ Join link updated: {text[:80]}", "green")
+        except Exception as e:
+            self.log(f"Could not read clipboard: {e}", "red")
+
+    def _clear_join_link(self):
+        """Clear the saved join link."""
+        self.join_link_var.set("")
+        self.cfg["server_join_link"] = ""
+        save_config(self.cfg)
+        self.log("Join link cleared. Raid alerts will not include a join button until set again.", "yellow")
+
+    def _quick_update_join_link(self):
+        """Main-tab shortcut - paste clipboard as join link, show toast."""
+        try:
+            text = self.root.clipboard_get().strip()
+            if not text:
+                self.log("Clipboard empty. Copy the join link from your browser first.", "yellow")
+                return
+            lower = text.lower()
+            if not any(k in lower for k in ("roblox.com", "roblox://", "games/start", "ropro")):
+                self.log(f"Clipboard doesn't contain a Roblox link. Got: {text[:60]}", "red")
+                return
+            self.cfg["server_join_link"] = text
+            save_config(self.cfg)
+            if hasattr(self, "join_link_var"):
+                self.join_link_var.set(text)
+            self.log(f"🎯 Join link updated for this server: {text[:80]}", "green")
+        except Exception as e:
+            self.log(f"Could not update join link: {e}", "red")
+
     def _toggle_streamer_mode(self):
         """Toggle streamer mode - hides webhook and ntfy channel in UI."""
         self.cfg["streamer_mode"] = not self.cfg.get("streamer_mode", False)
@@ -1443,12 +1524,25 @@ SETTINGS TAB
 Webhook URL - your Discord channel webhook (already filled in by default)
 Ally Webhooks - paste webhooks from allied gang servers to alert them too
 Alert Message - the text sent with every raid alert (role pings are included)
+Quick Join Link - paste your server's RoPro join link here to include a
+                  "One-Click Join" button in every raid alert embed
 Anti-AFK - clicks inside Roblox every few minutes to prevent getting kicked
 Mobile Push - sends a notification to your phone via the ntfy app (free)
 Auto-Update - checks for new versions automatically when the bot launches
 
 The GitHub repo and ntfy channel are locked. Click the Unlock button and
 enter the developer password if you need to change them.
+
+
+QUICK JOIN LINK (RoPro)
+------------------------
+When your bot is in a server, copy the RoPro "Join" link from your browser
+(or any direct roblox:// link) and paste it into the bot via the button on
+the MAIN tab. Every raid alert from then on will include a clickable
+"One-Click Join" field in Discord so your gang can jump in instantly.
+
+When you change servers, just hit the "Update Server Join Link" button on
+the main tab and paste the new link. Takes 2 seconds.
 
 
 HISTORY TAB
@@ -2189,6 +2283,8 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
         self.cfg["webhook_desc_2"]        = self._fv_webhook_desc_2.get().strip()
         self.cfg["webhook_desc_3"]        = self._fv_webhook_desc_3.get().strip()
         self.cfg["discord_message"]       = self._fv_discord_message.get().strip()
+        self.cfg["server_join_link"]      = self.join_link_var.get().strip()
+        self.cfg["join_link_enabled"]     = self.join_enabled_var.get()
         self.cfg["stop_message"]          = self._fv_stop_message.get().strip()
         self.cfg["red_threshold"]         = self._sv_red_threshold.get()
         self.cfg["template_confidence"]   = self._sv_template_confidence.get()
@@ -2653,6 +2749,14 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                 },
                 "timestamp": ts_iso,
             }
+            # Add join link as a prominent field if set
+            join_link = (self.cfg.get("server_join_link") or "").strip()
+            if join_link and self.cfg.get("join_link_enabled", True):
+                embed["fields"].append({
+                    "name": "🎯 One-Click Join",
+                    "value": f"[**→ Join the server instantly**]({join_link})",
+                    "inline": False,
+                })
             sent = 0
             for url, desc in webhooks:
                 ok, info, msg_id = send_discord(url, self.cfg["discord_message"], screenshot_path, embed=embed)
