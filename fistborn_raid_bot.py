@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.3.1"
+APP_VERSION = "1.3.2"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -122,6 +122,11 @@ DEFAULT_CONFIG = {
     "roblox_cookie": "",
     "roblox_user_id": "9405149316",
     "auto_fetch_join_link": True,
+    "roblox_username": "",
+    "roblox_password_enc": "",
+    "auto_login_enabled": False,
+    "last_login_attempt": 0,
+    "login_backoff_until": 0,
     "version": APP_VERSION,
     "update_check_enabled": True,
     "update_repo": "typekaiser/kaisers-raid-utility",
@@ -644,8 +649,11 @@ def fetch_roblox_presence(user_id, cookie, debug=False):
             }
 
         if game_id:
-            join_link = f"https://www.roblox.com/games/start?placeId={place_id}&gameInstanceId={game_id}"
-            link_quality = "full (specific server)"
+            # Use the roblox:// protocol URL - launches Roblox Player directly
+            # without going through Roblox's web redirect (which strips placeId
+            # when the user isn't authenticated on roblox.com in the same browser)
+            join_link = f"roblox://placeId={place_id}&gameInstanceId={game_id}"
+            link_quality = "full (specific server via roblox:// protocol)"
         else:
             join_link = f"https://www.roblox.com/games/{place_id}"
             link_quality = "partial (game only)"
