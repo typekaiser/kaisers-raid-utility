@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.4.3"
+APP_VERSION = "1.4.4"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -1787,7 +1787,6 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
 
                     # Download to same folder as current exe with a temp name
                     tmp_path = current_exe + ".new"
-                    old_path = current_exe + ".old"
 
                     def _progress(block_num, block_size, total_size):
                         if total_size > 0:
@@ -1797,34 +1796,23 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                     self.root.after(0, lambda: progress_lbl.config(text="Downloading update..."))
                     urllib.request.urlretrieve(download_url, tmp_path, _progress)
                     self.root.after(0, lambda: _update_progress(100))
-                    self.root.after(0, lambda: progress_lbl.config(text="Installing - app will relaunch..."))
+                    self.root.after(0, lambda: progress_lbl.config(
+                        text="Done! Relaunching in 3 seconds..."))
 
-                    bat_path = os.path.join(os.path.dirname(current_exe), "_updater.bat")
-                    current_name = os.path.basename(current_exe)
-
-                    # Retry loop so the move doesn't fail if the exe is still locked
-                    bat_content = (
-                        "@echo off\n"
-                        "echo Waiting for app to close...\n"
-                        "timeout /t 3 /nobreak >NUL\n"
-                        ":retry\n"
-                        f"move /Y \"{tmp_path}\" \"{current_exe}\" >NUL 2>&1\n"
-                        "if errorlevel 1 (\n"
-                        "    timeout /t 1 /nobreak >NUL\n"
-                        "    goto retry\n"
-                        ")\n"
-                        f"start \"\" \"{current_exe}\"\n"
-                        "del \"%~f0\"\n"
+                    # Single PowerShell command - no temp files, no batch encoding issues
+                    # Waits 3 seconds, moves .new over old exe, launches new exe
+                    ps_cmd = (
+                        f"Start-Sleep -Seconds 3; "
+                        f"Move-Item -Path '{tmp_path}' -Destination '{current_exe}' -Force; "
+                        f"Start-Process '{current_exe}'"
                     )
-                    with open(bat_path, "w") as bat_f:
-                        bat_f.write(bat_content)
-
                     subprocess.Popen(
-                        ["cmd.exe", "/c", bat_path],
+                        ["powershell", "-WindowStyle", "Hidden", "-Command", ps_cmd],
                         creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
                         close_fds=True,
                     )
-                    time.sleep(0.8)
+                    # Wait 1 second so PowerShell is definitely running before we exit
+                    time.sleep(1)
                     self.root.after(0, lambda: self.root.destroy())
 
                 except Exception as e:
