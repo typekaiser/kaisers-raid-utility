@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.3.3"
+APP_VERSION = "1.3.4"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -1995,6 +1995,213 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
             self.log(f"Found {len(wins)} window(s).", "green")
         else:
             self.log("No windows found. Tick 'Show ALL windows' and refresh.", "yellow")
+
+    def _paste_join_link(self):
+        try:
+            text = self.root.clipboard_get().strip()
+            if not text:
+                self.log("Clipboard is empty.", "yellow"); return
+            lower = text.lower()
+            if not any(k in lower for k in ("roblox.com", "roblox://", "games/start", "ropro")):
+                self.log(f"That doesn't look like a Roblox join link: {text[:60]}", "yellow"); return
+            self.join_link_var.set(text)
+            self.cfg["server_join_link"] = text
+            save_config(self.cfg)
+            self.log(f"✓ Join link updated: {text[:80]}", "green")
+        except Exception as e:
+            self.log(f"Could not read clipboard: {e}", "red")
+
+    def _clear_join_link(self):
+        self.join_link_var.set("")
+        self.cfg["server_join_link"] = ""
+        save_config(self.cfg)
+        self.log("Join link cleared.", "yellow")
+
+    def _clear_cookie(self):
+        if not getattr(self, "_dev_unlocked", False):
+            self.log("🔒 Dev-locked. Unlock first to modify cookie.", "yellow"); return
+        self.cookie_var.set("")
+        self.cfg["roblox_cookie"] = ""
+        save_config(self.cfg)
+        self.log("Cookie cleared.", "yellow")
+
+    def _test_presence_fetch(self):
+        uid    = self.roblox_uid_var.get().strip()
+        cookie = self.cookie_var.get().strip()
+        if not uid:
+            self.log("❌ No user ID set.", "red"); return
+        if not cookie:
+            self.log("❌ No cookie set. Unlock dev settings and paste the cookie first.", "red"); return
+        self.log("🔄 Testing presence fetch...", "white")
+        def _run():
+            result = fetch_roblox_presence(uid, cookie, debug=True)
+            if not result:
+                self.log("❌ Fetch failed completely.", "red"); return
+            if result.get("auth_user_id"):
+                match = str(result["auth_user_id"]) == str(uid)
+                self.log(f"   Cookie logged in as user ID: {result['auth_user_id']}",
+                         "green" if match else "yellow")
+                if not match:
+                    self.log(f"   ⚠ Cookie owner ({result['auth_user_id']}) != queried user ({uid})", "yellow")
+            if result.get("raw"):
+                self.log(f"   Raw: {result['raw']}", "white")
+            if result.get("error"):
+                self.log(f"❌ {result['error']}", "red")
+                if result.get("userPresenceType") is not None:
+                    s = {0:"Offline",1:"Online (website)",2:"In-Game",3:"In-Studio"}.get(result["userPresenceType"],"Unknown")
+                    self.log(f"   Status: {s}", "yellow")
+                return
+            self.log(f"✅ SUCCESS - {result.get('link_quality','link built')}", "green")
+            self.log(f"   placeId: {result['placeId']}", "green")
+            self.log(f"   gameId:  {result.get('gameId') or '(missing)'}", "green" if result.get("gameId") else "yellow")
+            self.log(f"   Link:    {result['join_link']}", "green")
+            self.cfg["server_join_link"] = result["join_link"]
+            if hasattr(self, "join_link_var"): self.join_link_var.set(result["join_link"])
+            save_config(self.cfg)
+            self.log("   ✓ Saved as fallback link.", "green")
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _load_fields_from_cfg(self):
+        """Reload all UI field variables from self.cfg after a preset/profile load."""
+        for key, var_name in [
+            ("webhook_url",        "_fv_webhook_url"),
+            ("webhook_url_2",      "_fv_webhook_url_2"),
+            ("webhook_url_3",      "_fv_webhook_url_3"),
+            ("discord_message",    "_fv_discord_message"),
+            ("discord_message_2",  "_fv_discord_message_2"),
+            ("discord_message_3",  "_fv_discord_message_3"),
+        ]:
+            if hasattr(self, var_name):
+                getattr(self, var_name).set(self.cfg.get(key, ""))
+        if hasattr(self, "sound_var"):        self.sound_var.set(self.cfg.get("sound_enabled", True))
+        if hasattr(self, "screenshot_var"):   self.screenshot_var.set(self.cfg.get("screenshot_enabled", True))
+        if hasattr(self, "anti_afk_var"):     self.anti_afk_var.set(self.cfg.get("anti_afk_enabled", False))
+        if hasattr(self, "ntfy_var"):         self.ntfy_var.set(self.cfg.get("ntfy_enabled", False))
+        if hasattr(self, "update_check_var"): self.update_check_var.set(self.cfg.get("update_check_enabled", True))
+
+    def _draw_heatmap(self):
+        """Draw a 7-day x 24-hour heatmap on heatmap_canvas."""
+        try:
+            canvas = self.heatmap_canvas
+            canvas.delete("all")
+            w = canvas.winfo_width() or 500
+            h = canvas.winfo_height() or 120
+            if not self._history:
+                canvas.create_text(w//2, h//2, text="No raid history yet",
+                                   fill=SUB, font=("Segoe UI", 9))
+                return
+            import collections, datetime as dt
+            counts = collections.defaultdict(int)
+            for entry in self._history:
+                try:
+                    ts = entry.get("time", "")
+                    d = dt.datetime.fromisoformat(ts)
+                    counts[(d.weekday(), d.hour)] += 1
+                except Exception:
+                    pass
+            max_count = max(counts.values()) if counts else 1
+            cell_w = w / 24
+            cell_h = (h - 20) / 7
+            days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+            for day in range(7):
+                canvas.create_text(4, 20 + day * cell_h + cell_h/2,
+                                   text=days[day], fill=SUB,
+                                   font=("Segoe UI", 7), anchor="w")
+            for hour in range(24):
+                canvas.create_text(32 + hour * cell_w + cell_w/2, 8,
+                                   text=str(hour), fill=SUB,
+                                   font=("Segoe UI", 6))
+            for day in range(7):
+                for hour in range(24):
+                    count = counts.get((day, hour), 0)
+                    intensity = int(255 * count / max_count) if max_count else 0
+                    r = min(255, 60 + intensity)
+                    g = max(0, 80 - intensity // 2)
+                    b = max(0, 80 - intensity // 2)
+                    colour = f"#{r:02x}{g:02x}{b:02x}"
+                    x1 = 32 + hour * cell_w
+                    y1 = 20 + day * cell_h
+                    canvas.create_rectangle(x1, y1, x1+cell_w-1, y1+cell_h-1,
+                                            fill=colour, outline="")
+        except Exception:
+            pass
+
+    def _quick_update_join_link(self):
+        """Main-tab shortcut - paste clipboard as join link."""
+        try:
+            text = self.root.clipboard_get().strip()
+            if not text:
+                self.log("Clipboard empty. Copy a Roblox join link first.", "yellow")
+                return
+            lower = text.lower()
+            if not any(k in lower for k in ("roblox.com", "roblox://", "games/start", "ropro")):
+                self.log(f"Clipboard doesn't look like a Roblox link: {text[:60]}", "red")
+                return
+            self.cfg["server_join_link"] = text
+            save_config(self.cfg)
+            if hasattr(self, "join_link_var"):
+                self.join_link_var.set(text)
+            self.log(f"🎯 Join link updated: {text[:80]}", "green")
+        except Exception as e:
+            self.log(f"Could not update join link: {e}", "red")
+
+    def _paste_webhook(self):
+        try:
+            text = self.root.clipboard_get().strip()
+            if text:
+                self._fv_webhook_url.set(text)
+                self.log("Webhook URL pasted from clipboard.", "green")
+            else:
+                self.log("Clipboard is empty.", "yellow")
+        except Exception:
+            self.log("Could not read clipboard.", "yellow")
+
+    def _quick_setup(self):
+        """One-click preset optimised for Fistborn."""
+        presets = {
+            "detection_mode": "template_ocr",
+            "template_confidence": 72,
+            "scan_interval": 2,
+            "cooldown": 30,
+            "sound_enabled": True,
+            "screenshot_enabled": True,
+            "leaderboard_enabled": True,
+            "anti_afk_enabled": True,
+            "anti_afk_interval": 300,
+        }
+        self.cfg.update(presets)
+        self._load_fields_from_cfg()
+        save_config(self.cfg)
+        self.log("Quick Setup applied - optimised for Fistborn raid detection.", "green")
+
+    def _apply_hotkey(self):
+        """Register the hotkey from the settings field."""
+        key = self.hotkey_var.get().strip().lower()
+        if not key:
+            self.log("No hotkey entered.", "yellow")
+            return
+        try:
+            keyboard.unhook_all_hotkeys()
+            keyboard.add_hotkey(key, lambda: self.root.after(0, self._manual_alert))
+            self.cfg["hotkey"] = key
+            save_config(self.cfg)
+            self.log(f"Hotkey registered: {key.upper()} = manual ping", "green")
+        except Exception as e:
+            self.log(f"Hotkey error: {e}", "red")
+
+    def _update_history_display(self):
+        """Refresh the history listbox and heatmap."""
+        try:
+            self.history_box.config(state="normal")
+            self.history_box.delete("1.0", "end")
+            for entry in reversed(self._history[-100:]):
+                ts = entry.get("time", "")
+                reason = entry.get("reason", "")
+                self.history_box.insert("end", f"{ts}  {reason}\n")
+            self.history_box.config(state="disabled")
+            self._draw_heatmap()
+        except Exception:
+            pass
 
     def _on_window_select(self, *_):
         idx = self.window_combo.current()
