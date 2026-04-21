@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.4.2"
+APP_VERSION = "1.4.3"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -1797,43 +1797,34 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                     self.root.after(0, lambda: progress_lbl.config(text="Downloading update..."))
                     urllib.request.urlretrieve(download_url, tmp_path, _progress)
                     self.root.after(0, lambda: _update_progress(100))
-                    self.root.after(0, lambda: progress_lbl.config(text="Installing..."))
+                    self.root.after(0, lambda: progress_lbl.config(text="Installing - app will relaunch..."))
 
-                    # Write a batch script that:
-                    # 1. Waits for old process to fully exit
-                    # 2. Renames old exe to .old as backup
-                    # 3. Renames .new to the real exe name
-                    # 4. Launches the new exe
-                    # 5. Deletes the .old backup and itself
                     bat_path = os.path.join(os.path.dirname(current_exe), "_updater.bat")
                     current_name = os.path.basename(current_exe)
+
+                    # Retry loop so the move doesn't fail if the exe is still locked
                     bat_content = (
                         "@echo off\n"
                         "echo Waiting for app to close...\n"
-                        ":waitloop\n"
-                        f"tasklist /FI \"IMAGENAME eq {current_name}\" 2>NUL | find /I \"{current_name}\" >NUL\n"
-                        "if not errorlevel 1 (\n"
+                        "timeout /t 3 /nobreak >NUL\n"
+                        ":retry\n"
+                        f"move /Y \"{tmp_path}\" \"{current_exe}\" >NUL 2>&1\n"
+                        "if errorlevel 1 (\n"
                         "    timeout /t 1 /nobreak >NUL\n"
-                        "    goto waitloop\n"
+                        "    goto retry\n"
                         ")\n"
-                        f"if exist \"{old_path}\" del /F /Q \"{old_path}\"\n"
-                        f"move /Y \"{current_exe}\" \"{old_path}\"\n"
-                        f"move /Y \"{tmp_path}\" \"{current_exe}\"\n"
                         f"start \"\" \"{current_exe}\"\n"
-                        f"if exist \"{old_path}\" del /F /Q \"{old_path}\"\n"
                         "del \"%~f0\"\n"
                     )
                     with open(bat_path, "w") as bat_f:
                         bat_f.write(bat_content)
 
-                    # Launch the batch script BEFORE we close
                     subprocess.Popen(
                         ["cmd.exe", "/c", bat_path],
                         creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
                         close_fds=True,
                     )
-                    # Brief delay so batch process is definitely running before we close
-                    time.sleep(0.5)
+                    time.sleep(0.8)
                     self.root.after(0, lambda: self.root.destroy())
 
                 except Exception as e:
