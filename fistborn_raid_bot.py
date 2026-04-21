@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.3.9"
+APP_VERSION = "1.4.0"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -1776,7 +1776,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
 
             def _download():
                 try:
-                    import tempfile, shutil, subprocess, urllib.request
+                    import subprocess, urllib.request
 
                     # Work out where the current exe lives
                     if getattr(_sys, "frozen", False):
@@ -1786,9 +1786,9 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                         self.root.after(0, lambda: _fallback_browser())
                         return
 
-                    # Download to a temp file with progress tracking
-                    tmp_dir  = tempfile.mkdtemp()
-                    tmp_path = os.path.join(tmp_dir, "FistbornRaidAlarm_new.exe")
+                    # Download to same folder as current exe with a temp name
+                    tmp_path = current_exe + ".new"
+                    old_path = current_exe + ".old"
 
                     def _progress(block_num, block_size, total_size):
                         if total_size > 0:
@@ -1801,27 +1801,41 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                     self.root.after(0, lambda: progress_lbl.config(text="Installing..."))
 
                     # Write a batch script that:
-                    # 1. Waits for this process to exit
-                    # 2. Replaces the old exe with the new one
-                    # 3. Launches the new exe
-                    # 4. Deletes itself
-                    bat_path = os.path.join(tmp_dir, "updater.bat")
-                    bat_content = f"""@echo off
-timeout /t 2 /nobreak > nul
-move /Y "{tmp_path}" "{current_exe}"
-start "" "{current_exe}"
-del "%~f0"
-"""
+                    # 1. Waits for old process to fully exit
+                    # 2. Renames old exe to .old as backup
+                    # 3. Renames .new to the real exe name
+                    # 4. Launches the new exe
+                    # 5. Deletes the .old backup and itself
+                    bat_path = os.path.join(os.path.dirname(current_exe), "_updater.bat")
+                    current_name = os.path.basename(current_exe)
+                    bat_content = (
+                        "@echo off\n"
+                        "echo Waiting for app to close...\n"
+                        ":waitloop\n"
+                        f"tasklist /FI \"IMAGENAME eq {current_name}\" 2>NUL | find /I \"{current_name}\" >NUL\n"
+                        "if not errorlevel 1 (\n"
+                        "    timeout /t 1 /nobreak >NUL\n"
+                        "    goto waitloop\n"
+                        ")\n"
+                        f"if exist \"{old_path}\" del /F /Q \"{old_path}\"\n"
+                        f"move /Y \"{current_exe}\" \"{old_path}\"\n"
+                        f"move /Y \"{tmp_path}\" \"{current_exe}\"\n"
+                        f"start \"\" \"{current_exe}\"\n"
+                        f"if exist \"{old_path}\" del /F /Q \"{old_path}\"\n"
+                        "del \"%~f0\"\n"
+                    )
                     with open(bat_path, "w") as bat_f:
                         bat_f.write(bat_content)
 
-                    # Launch the batch script hidden, then close ourselves
+                    # Launch the batch script BEFORE we close
                     subprocess.Popen(
                         ["cmd.exe", "/c", bat_path],
-                        creationflags=subprocess.CREATE_NO_WINDOW,
+                        creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
                         close_fds=True,
                     )
-                    self.root.after(500, lambda: self.root.destroy())
+                    # Brief delay so batch process is definitely running before we close
+                    time.sleep(0.5)
+                    self.root.after(0, lambda: self.root.destroy())
 
                 except Exception as e:
                     self.root.after(0, lambda err=str(e): _download_failed(err))
