@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.3.6"
+APP_VERSION = "1.3.8"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -1416,6 +1416,10 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
         test_row = tk.Frame(sec_test, bg=BG2); test_row.pack(fill="x")
         self._btn(test_row, "🚨 Test Raid Alert", self._test_alert, "#5865F2", 20).pack(side="left", padx=4)
         self._btn(test_row, "Test Webhook", self._test_webhook, ACCENT).pack(side="left", padx=4)
+        test_row2 = tk.Frame(sec_test, bg=BG2); test_row2.pack(fill="x", pady=(6, 0))
+        self._btn(test_row2, "🔄 Test Update Flow", self._test_update_flow, YELLOW).pack(side="left", padx=4)
+        tk.Label(test_row2, text="Simulates the update popup and download sequence",
+                 bg=BG2, fg=SUB, font=("Segoe UI", 8)).pack(side="left", padx=6)
 
         # ── SAVE BUTTON ───────────────────────────────────────────────────────
         tk.Button(f, text="💾  Save All Settings",
@@ -1655,55 +1659,154 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
     def _show_update_popup(self, new_ver, cur_ver, changelog, download_url, critical):
         top = tk.Toplevel(self.root)
         top.title("Update Available")
-        top.geometry("500x380")
+        top.geometry("500x420")
         top.configure(bg=BG)
         top.transient(self.root)
+        top.resizable(False, False)
         if critical:
             top.grab_set()
 
+        # Centre popup
+        top.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 250
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - 210
+        top.geometry(f"+{x}+{y}")
+
         tk.Label(top, text="🚀  Update Available!",
-                 bg=BG, fg=ACCENT, font=("Segoe UI", 14, "bold")).pack(pady=(12,4))
-        tk.Label(top, text=f"Current: v{cur_ver}    →    New: v{new_ver}",
+                 bg=BG, fg=ACCENT, font=("Segoe UI", 14, "bold")).pack(pady=(14, 4))
+        tk.Label(top, text=f"v{cur_ver}  →  v{new_ver}",
                  bg=BG, fg=TEXT, font=("Segoe UI", 11)).pack()
         if critical:
-            tk.Label(top, text="⚠️  CRITICAL UPDATE - highly recommended",
-                     bg=BG, fg=ACCENT, font=("Segoe UI", 10, "bold")).pack(pady=(4,0))
+            tk.Label(top, text="⚠️  CRITICAL UPDATE - install now",
+                     bg=BG, fg=ACCENT, font=("Segoe UI", 10, "bold")).pack(pady=(4, 0))
 
         tk.Label(top, text="What's new:", bg=BG, fg=SUB,
-                 font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=20, pady=(10,2))
-        cl = scrolledtext.ScrolledText(top, bg=BG2, fg=TEXT, font=("Segoe UI", 10),
-                                        relief="flat", bd=4, wrap="word", height=10)
+                 font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=20, pady=(10, 2))
+        cl = scrolledtext.ScrolledText(top, bg=BG2, fg=TEXT, font=("Segoe UI", 9),
+                                        relief="flat", bd=4, wrap="word", height=7)
         cl.pack(fill="both", expand=True, padx=20)
         cl.insert("1.0", changelog)
         cl.config(state="disabled")
 
+        # Progress bar (hidden until download starts)
+        progress_frame = tk.Frame(top, bg=BG)
+        progress_frame.pack(fill="x", padx=20, pady=(8, 0))
+        progress_lbl = tk.Label(progress_frame, text="", bg=BG, fg=SUB,
+                                 font=("Segoe UI", 9))
+        progress_lbl.pack(anchor="w")
+        progress_bar = ttk.Progressbar(progress_frame, orient="horizontal",
+                                        mode="determinate", maximum=100, value=0)
+
         btn_row = tk.Frame(top, bg=BG); btn_row.pack(pady=10)
-        def open_download():
-            try:
+
+        def _start_update():
+            """Download the exe, replace the old one, relaunch."""
+            if not download_url:
+                # No direct URL - fall back to opening browser
                 import webbrowser
-                if download_url:
-                    webbrowser.open(download_url)
-                else:
-                    # No direct exe URL - open the releases page as fallback
-                    repo = (self.cfg.get("update_repo") or "typekaiser/kaisers-raid-utility").strip()
-                    webbrowser.open(f"https://github.com/{repo}/releases/latest")
-            except Exception as e:
-                self.log(f"Could not open download link: {e}", "red")
-            top.destroy()
-        def skip():
+                repo = (self.cfg.get("update_repo") or "typekaiser/kaisers-raid-utility").strip()
+                webbrowser.open(f"https://github.com/{repo}/releases/latest")
+                top.destroy()
+                return
+
+            # Hide buttons, show progress bar
+            update_btn.config(state="disabled", text="Downloading...")
+            skip_btn.pack_forget() if not critical else None
+            later_btn.pack_forget() if not critical else None
+            progress_bar.pack(fill="x", pady=(4, 0))
+
+            def _download():
+                try:
+                    import tempfile, shutil, subprocess, urllib.request
+
+                    # Work out where the current exe lives
+                    if getattr(_sys, "frozen", False):
+                        current_exe = os.path.abspath(_sys.executable)
+                    else:
+                        # Running as .py - can't self-replace, open browser instead
+                        self.root.after(0, lambda: _fallback_browser())
+                        return
+
+                    # Download to a temp file with progress tracking
+                    tmp_dir  = tempfile.mkdtemp()
+                    tmp_path = os.path.join(tmp_dir, "FistbornRaidAlarm_new.exe")
+
+                    def _progress(block_num, block_size, total_size):
+                        if total_size > 0:
+                            pct = min(100, int(block_num * block_size * 100 / total_size))
+                            self.root.after(0, lambda p=pct: _update_progress(p))
+
+                    self.root.after(0, lambda: progress_lbl.config(text="Downloading update..."))
+                    urllib.request.urlretrieve(download_url, tmp_path, _progress)
+                    self.root.after(0, lambda: _update_progress(100))
+                    self.root.after(0, lambda: progress_lbl.config(text="Installing..."))
+
+                    # Write a batch script that:
+                    # 1. Waits for this process to exit
+                    # 2. Replaces the old exe with the new one
+                    # 3. Launches the new exe
+                    # 4. Deletes itself
+                    bat_path = os.path.join(tmp_dir, "updater.bat")
+                    bat_content = f"""@echo off
+timeout /t 2 /nobreak > nul
+move /Y "{tmp_path}" "{current_exe}"
+start "" "{current_exe}"
+del "%~f0"
+"""
+                    with open(bat_path, "w") as bat_f:
+                        bat_f.write(bat_content)
+
+                    # Launch the batch script hidden, then close ourselves
+                    subprocess.Popen(
+                        ["cmd.exe", "/c", bat_path],
+                        creationflags=subprocess.CREATE_NO_WINDOW,
+                        close_fds=True,
+                    )
+                    self.root.after(500, lambda: self.root.destroy())
+
+                except Exception as e:
+                    self.root.after(0, lambda err=str(e): _download_failed(err))
+
+            def _update_progress(pct):
+                progress_bar["value"] = pct
+                progress_lbl.config(text=f"Downloading... {pct}%")
+
+            def _download_failed(err):
+                progress_lbl.config(text=f"Download failed: {err[:60]}", fg=ACCENT)
+                update_btn.config(state="normal", text="Try Again")
+                self.log(f"Update download failed: {err}", "red")
+
+            def _fallback_browser():
+                import webbrowser
+                repo = (self.cfg.get("update_repo") or "typekaiser/kaisers-raid-utility").strip()
+                webbrowser.open(f"https://github.com/{repo}/releases/latest")
+                top.destroy()
+
+            threading.Thread(target=_download, daemon=True).start()
+
+        def _skip():
             self.cfg["skipped_version"] = new_ver
             save_config(self.cfg)
             top.destroy()
-        tk.Button(btn_row, text="Download Update", command=open_download,
-                  bg=GREEN, fg="white", relief="flat",
-                  font=("Segoe UI", 10, "bold"), width=18).pack(side="left", padx=4)
+
+        update_btn = tk.Button(btn_row, text="⬇  Update Now",
+                               command=_start_update,
+                               bg=GREEN, fg="white", relief="flat",
+                               font=("Segoe UI", 11, "bold"),
+                               width=16, pady=8, cursor="hand2")
+        update_btn.pack(side="left", padx=4)
+
         if not critical:
-            tk.Button(btn_row, text="Skip This Version", command=skip,
-                      bg=BG3, fg=TEXT, relief="flat",
-                      font=("Segoe UI", 10), width=18).pack(side="left", padx=4)
-            tk.Button(btn_row, text="Remind Me Later", command=top.destroy,
-                      bg=BG3, fg=TEXT, relief="flat",
-                      font=("Segoe UI", 10), width=18).pack(side="left", padx=4)
+            skip_btn = tk.Button(btn_row, text="Skip Version",
+                                  command=_skip,
+                                  bg=BG3, fg=TEXT, relief="flat",
+                                  font=("Segoe UI", 10), width=14, cursor="hand2")
+            skip_btn.pack(side="left", padx=4)
+            later_btn = tk.Button(btn_row, text="Remind Me Later",
+                                   command=top.destroy,
+                                   bg=BG3, fg=TEXT, relief="flat",
+                                   font=("Segoe UI", 10), width=14, cursor="hand2")
+            later_btn.pack(side="left", padx=4)
 
     def _unlock_dev_settings(self):
         """Prompt for dev password via custom popup, unlock dev fields if correct."""
@@ -2130,6 +2233,32 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
         except Exception:
             pass
 
+    def _test_update_flow(self):
+        """Fire a fake update popup using the real latest release download URL
+        so the full sequence (popup → progress bar → relaunch) can be tested."""
+        repo = (self.cfg.get("update_repo") or "typekaiser/kaisers-raid-utility").strip()
+        self.log("🔄 Fetching latest release URL for update flow test...", "white")
+        def _fetch():
+            try:
+                url = f"https://api.github.com/repos/{repo}/releases/latest"
+                resp = requests.get(url, timeout=10)
+                if resp.status_code != 200:
+                    self.log(f"❌ Could not fetch release: HTTP {resp.status_code}", "red")
+                    return
+                data = resp.json()
+                dl_url = ""
+                for asset in data.get("assets", []):
+                    if asset.get("name", "").lower().endswith(".exe"):
+                        dl_url = asset.get("browser_download_url", "")
+                        break
+                changelog = "This is a test of the update flow.\n\nThe download bar and auto-relaunch are real.\nIf you click Update Now the bot will actually download the latest exe and relaunch."
+                self.root.after(0, lambda: self._show_update_popup(
+                    "TEST", APP_VERSION, changelog, dl_url, False))
+                self.log("✓ Test update popup triggered. Check the popup window.", "green")
+            except Exception as e:
+                self.log(f"❌ Test update flow error: {e}", "red")
+        threading.Thread(target=_fetch, daemon=True).start()
+
     def _quick_update_join_link(self):
         """Main-tab shortcut - paste clipboard as join link."""
         try:
@@ -2483,10 +2612,20 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
 
     def _start(self):
         if not CAPTURE_AVAILABLE:
-            self.log("Missing libraries. Run: pip install Pillow opencv-python mss", "red")
+            self.log("❌ Missing capture libraries (numpy/opencv/mss). Reinstall or rebuild exe.", "red")
+            # Show a popup so it's impossible to miss
+            import tkinter.messagebox as mb
+            mb.showerror("Cannot Start", 
+                         "Required libraries are missing:\n\nnumpy, opencv-python, mss\n\n"
+                         "If running as exe: rebuild with PyInstaller.\n"
+                         "If running as script: run: pip install numpy opencv-python mss")
             return
         if not self.selected_handle and not self.cfg.get("scan_zone"):
-            self.log("Select a Roblox window first.", "red")
+            self.log("❌ No Roblox window selected. Pick one from the dropdown on the HOME tab.", "red")
+            import tkinter.messagebox as mb
+            mb.showerror("Cannot Start", 
+                         "No Roblox window selected.\n\n"
+                         "Pick your Roblox window from the dropdown on the HOME tab, then try again.")
             return
         self._save_settings()
         self.running = True
