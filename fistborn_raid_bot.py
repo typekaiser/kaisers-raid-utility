@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.3.2"
+APP_VERSION = "1.3.3"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -117,6 +117,8 @@ DEFAULT_CONFIG = {
     "webhook_desc_2": "Ally #1",
     "webhook_desc_3": "Ally #2",
     "discord_message": "<@&870791568200704030> <@&870791620910538783> <@&1454940232712454297> RAID DETECTED! Join the server in the screenshot below or click the link below: https://www.roblox.com/users/9405149316/profile",
+    "discord_message_2": "",
+    "discord_message_3": "",
     "server_join_link": "",
     "join_link_enabled": True,
     "roblox_cookie": "",
@@ -649,11 +651,10 @@ def fetch_roblox_presence(user_id, cookie, debug=False):
             }
 
         if game_id:
-            # Use the roblox:// protocol URL - launches Roblox Player directly
-            # without going through Roblox's web redirect (which strips placeId
-            # when the user isn't authenticated on roblox.com in the same browser)
-            join_link = f"roblox://placeId={place_id}&gameInstanceId={game_id}"
-            link_quality = "full (specific server via roblox:// protocol)"
+            # Discord markdown only supports http/https links, so we use the standard
+            # roblox.com URL. This triggers roblox:// protocol handler in the browser.
+            join_link = f"https://www.roblox.com/games/start?placeId={place_id}&gameInstanceId={game_id}"
+            link_quality = "full (specific server)"
         else:
             join_link = f"https://www.roblox.com/games/{place_id}"
             link_quality = "partial (game only)"
@@ -865,11 +866,13 @@ class RaidBotApp:
     # ── UI build ──────────────────────────────────────────────────────────────
 
     def _build_ui(self):
+        # ── Top header bar ────────────────────────────────────────────────────
         hdr = tk.Frame(self.root, bg=ACCENT, height=52)
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
-        tk.Label(hdr, text="TYPE://KAISERS RAID UTILITY V1 ALPHA",
-                 bg=ACCENT, fg="white", font=("Segoe UI", 14, "bold")).pack(side="left", padx=14)
+        tk.Label(hdr, text=f"TYPE://KAISERS RAID UTILITY  v{APP_VERSION}",
+                 bg=ACCENT, fg="white",
+                 font=("Segoe UI", 13, "bold")).pack(side="left", padx=14)
         self.status_lbl = tk.Label(hdr, text="  OFFLINE", bg=ACCENT, fg="white",
                                     font=("Segoe UI", 11, "bold"))
         self.status_lbl.pack(side="right", padx=14)
@@ -878,11 +881,12 @@ class RaidBotApp:
                   font=("Segoe UI", 13), cursor="hand2",
                   command=self._toggle_compact).pack(side="right", padx=4)
 
+        # ── Notebook style ─────────────────────────────────────────────────────
         style = ttk.Style()
         style.theme_use("default")
         style.configure("TNotebook", background=BG, borderwidth=0)
         style.configure("TNotebook.Tab", background=BG3, foreground=TEXT,
-                        padding=[12, 5], font=("Segoe UI", 10))
+                        padding=[16, 6], font=("Segoe UI", 11, "bold"))
         style.map("TNotebook.Tab",
                   background=[("selected", ACCENT)],
                   foreground=[("selected", "white")])
@@ -890,16 +894,12 @@ class RaidBotApp:
         self.nb = ttk.Notebook(self.root)
         self.nb.pack(fill="both", expand=True, padx=8, pady=8)
 
-        self._tab_main(self.nb)
-        self._tab_settings(self.nb)
-        self._tab_history(self.nb)
-        self._tab_log(self.nb)
-        self._tab_help(self.nb)
+        self._tab_home(self.nb)
+        self._tab_advanced(self.nb)
 
-        # Global mousewheel - scrolls whatever widget is under the cursor
+        # Global mousewheel handler
         def _global_scroll(e):
             widget = e.widget
-            # Walk up the widget tree looking for something scrollable
             while widget:
                 try:
                     widget.yview_scroll(int(-1*(e.delta/120)), "units")
@@ -912,110 +912,138 @@ class RaidBotApp:
                     break
         self.root.bind_all("<MouseWheel>", _global_scroll)
 
-    # ── MAIN TAB ──────────────────────────────────────────────────────────────
+    # ── HOME TAB ──────────────────────────────────────────────────────────────
 
-    def _tab_main(self, nb):
+    def _tab_home(self, nb):
         outer = tk.Frame(nb, bg=BG)
-        nb.add(outer, text="  🏠 MAIN  ")
+        nb.add(outer, text="  🏠 HOME  ")
 
         canvas = tk.Canvas(outer, bg=BG, highlightthickness=0)
         vsb = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=vsb.set)
         vsb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
-
         f = tk.Frame(canvas, bg=BG)
         win_id = canvas.create_window((0, 0), window=f, anchor="nw")
-
-        def _on_frame_configure(e):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-        def _on_canvas_configure(e):
-            canvas.itemconfig(win_id, width=e.width)
+        def _on_frame_configure(e): canvas.configure(scrollregion=canvas.bbox("all"))
+        def _on_canvas_configure(e): canvas.itemconfig(win_id, width=e.width)
         f.bind("<Configure>", _on_frame_configure)
         canvas.bind("<Configure>", _on_canvas_configure)
 
-        # ══ BIG STATUS BANNER AT TOP ═══════════════════════════════════════════
+        # ── STATUS BANNER ─────────────────────────────────────────────────────
         self.watch_frame = tk.Frame(f, bg=BG3)
         self.watch_frame.pack(fill="x", padx=8, pady=(8, 4))
-        banner_inner = tk.Frame(self.watch_frame, bg=BG3, pady=14)
+        banner_inner = tk.Frame(self.watch_frame, bg=BG3, pady=16)
         banner_inner.pack(fill="x")
         self.watch_dot = tk.Label(banner_inner, text="⬤", bg=BG3, fg=SUB,
-                                   font=("Segoe UI", 18, "bold"))
+                                   font=("Segoe UI", 20, "bold"))
         self.watch_dot.pack(side="left", padx=(16, 8))
         self.watch_lbl = tk.Label(banner_inner, text="Bot is offline",
-                                   bg=BG3, fg=SUB, font=("Segoe UI", 15, "bold"))
+                                   bg=BG3, fg=SUB, font=("Segoe UI", 16, "bold"))
         self.watch_lbl.pack(side="left")
-        # "Feeling Stuck?" button - always visible in the top banner
-        stuck_btn = tk.Button(banner_inner, text="❓ Feeling Stuck?",
-                              bg=YELLOW, fg=BG, relief="flat",
-                              font=("Segoe UI", 10, "bold"), cursor="hand2",
-                              command=self._show_help_popup)
-        stuck_btn.pack(side="right", padx=(4, 16))
         self.watch_scan_lbl = tk.Label(banner_inner, text="",
-                                        bg=BG3, fg=SUB, font=("Segoe UI", 10))
+                                        bg=BG3, fg=SUB, font=("Segoe UI", 9))
         self.watch_scan_lbl.pack(side="right", padx=4)
+        stuck_btn = tk.Button(banner_inner, text="❓ Help",
+                              bg=YELLOW, fg=BG, relief="flat",
+                              font=("Segoe UI", 9, "bold"), cursor="hand2",
+                              command=self._toggle_help_section)
+        stuck_btn.pack(side="right", padx=(4, 16))
 
-        # ══ BIG MAIN CONTROL BUTTONS ═══════════════════════════════════════════
-        ctrl = tk.Frame(f, bg=BG); ctrl.pack(fill="x", padx=8, pady=(2, 6))
-        self.start_btn = tk.Button(ctrl, text="▶  START BOT",
+        # ── 4 BIG CONTROL BUTTONS ─────────────────────────────────────────────
+        ctrl = tk.Frame(f, bg=BG); ctrl.pack(fill="x", padx=8, pady=(4, 4))
+        self.start_btn = tk.Button(ctrl, text="▶  START",
                                     bg=GREEN, fg="white", relief="flat",
                                     font=("Segoe UI", 13, "bold"),
-                                    cursor="hand2", pady=10,
+                                    cursor="hand2", pady=12,
                                     command=self._start)
         self.start_btn.pack(side="left", fill="x", expand=True, padx=(0, 3))
-
-        self.stop_btn = tk.Button(ctrl, text="■ STOP",
+        self.stop_btn = tk.Button(ctrl, text="■  STOP",
                                    bg=ACCENT, fg="white", relief="flat",
-                                   font=("Segoe UI", 12, "bold"),
-                                   cursor="hand2", pady=10, state="disabled",
+                                   font=("Segoe UI", 13, "bold"),
+                                   cursor="hand2", pady=12, state="disabled",
                                    command=self._stop)
         self.stop_btn.pack(side="left", fill="x", expand=True, padx=3)
-
-        self.pause_btn = tk.Button(ctrl, text="⏸ PAUSE",
+        self.pause_btn = tk.Button(ctrl, text="⏸  PAUSE",
                                     bg=YELLOW, fg=BG, relief="flat",
-                                    font=("Segoe UI", 12, "bold"),
-                                    cursor="hand2", pady=10, state="disabled",
+                                    font=("Segoe UI", 13, "bold"),
+                                    cursor="hand2", pady=12, state="disabled",
                                     command=self._pause)
         self.pause_btn.pack(side="left", fill="x", expand=True, padx=3)
-
-        tk.Button(ctrl, text="🚨 PING NOW",
+        tk.Button(ctrl, text="🚨  PING",
                   bg="#ff4400", fg="white", relief="flat",
-                  font=("Segoe UI", 12, "bold"),
-                  cursor="hand2", pady=10,
+                  font=("Segoe UI", 13, "bold"),
+                  cursor="hand2", pady=12,
                   command=self._manual_alert).pack(side="left", fill="x", expand=True, padx=(3, 0))
 
-        # Quick-access row for server link and testing
-        join_row = tk.Frame(f, bg=BG); join_row.pack(fill="x", padx=8, pady=(0, 6))
-        tk.Button(join_row, text="🎯 Update Server Link",
+        # ── QUICK ACTIONS ROW ─────────────────────────────────────────────────
+        qa = tk.Frame(f, bg=BG); qa.pack(fill="x", padx=8, pady=(0, 6))
+        tk.Button(qa, text="🎯 Update Server Link",
                   bg="#5865F2", fg="white", relief="flat",
-                  font=("Segoe UI", 10, "bold"),
-                  cursor="hand2", pady=6,
-                  command=self._quick_update_join_link).pack(side="left", fill="x", expand=True, padx=(0,3))
-        tk.Button(join_row, text="🧪 Fire Test Alert",
+                  font=("Segoe UI", 10, "bold"), cursor="hand2", pady=6,
+                  command=self._quick_update_join_link).pack(side="left", fill="x", expand=True, padx=(0, 3))
+        tk.Button(qa, text="🧪 Fire Test Alert",
                   bg=YELLOW, fg=BG, relief="flat",
-                  font=("Segoe UI", 10, "bold"),
-                  cursor="hand2", pady=6,
-                  command=self._test_alert).pack(side="left", fill="x", expand=True, padx=(3,0))
+                  font=("Segoe UI", 10, "bold"), cursor="hand2", pady=6,
+                  command=self._test_alert).pack(side="left", fill="x", expand=True, padx=(3, 0))
 
-        # ══ ROBLOX WINDOW - simplified ═════════════════════════════════════════
-        sec = self._section(f, "🎮  STEP 1 - Pick your Roblox window")
-        row = tk.Frame(sec, bg=BG2); row.pack(fill="x", pady=(0,4))
+        # ── ROBLOX WINDOW ─────────────────────────────────────────────────────
+        sec = self._section(f, "🎮  Roblox Window")
+        row = tk.Frame(sec, bg=BG2); row.pack(fill="x", pady=(0, 4))
         self.window_var = tk.StringVar()
         self.window_combo = ttk.Combobox(row, textvariable=self.window_var,
                                           state="readonly", width=42, font=("Segoe UI", 10))
-        self.window_combo.pack(side="left", padx=(0,6), fill="x", expand=True)
+        self.window_combo.pack(side="left", padx=(0, 6), fill="x", expand=True)
         self.window_combo.bind("<<ComboboxSelected>>", self._on_window_select)
         self._btn(row, "🔄 Refresh", self._refresh_windows, ACCENT).pack(side="left")
 
-        # ══ STATS - compact row ════════════════════════════════════════════════
-        stats_frame = tk.Frame(f, bg=BG); stats_frame.pack(fill="x", padx=8, pady=(6, 4))
-        self._big_stat(stats_frame, "🚨", "Alerts", "0", "stat_alerts")
-        self._big_stat(stats_frame, "⏱",  "Uptime", "00:00", "stat_uptime")
-        self._big_stat(stats_frame, "🔴", "Pixels", "0", "stat_pixels")
-        self._big_stat(stats_frame, "🕐", "Last",   "-",   "stat_last")
+        # ── PRIMARY WEBHOOK ───────────────────────────────────────────────────
+        sec_wh = self._section(f, "📣  Discord Webhook")
+        self._field(sec_wh, "Webhook URL:", "webhook_url", width=54)
+        self._field(sec_wh, "Alert Message:", "discord_message", width=54)
+        wh_btns = tk.Frame(sec_wh, bg=BG2); wh_btns.pack(fill="x", pady=(4, 0))
+        self._btn(wh_btns, "📋 Paste URL", self._paste_webhook, BG3).pack(side="left", padx=(0, 4))
+        self._btn(wh_btns, "⚡ Quick Setup", self._quick_setup, GREEN).pack(side="left")
+        self._btn(wh_btns, "Test Webhook", self._test_webhook, "#5865F2").pack(side="right")
 
-        # ══ COOLDOWN ═══════════════════════════════════════════════════════════
-        cd_frame = tk.Frame(f, bg=BG2); cd_frame.pack(fill="x", padx=8, pady=4)
+        # ── SIMPLE TOGGLES ────────────────────────────────────────────────────
+        sec_tog = self._section(f, "⚙️  Quick Settings")
+        self.sound_var = tk.BooleanVar(value=self.cfg.get("sound_enabled", True))
+        self.anti_afk_var = tk.BooleanVar(value=self.cfg.get("anti_afk_enabled", False))
+        self.ntfy_var = tk.BooleanVar(value=self.cfg.get("ntfy_enabled", False))
+        self.screenshot_var = tk.BooleanVar(value=self.cfg.get("screenshot_enabled", True))
+        tog_row1 = tk.Frame(sec_tog, bg=BG2); tog_row1.pack(fill="x")
+        tog_row2 = tk.Frame(sec_tog, bg=BG2); tog_row2.pack(fill="x", pady=(4, 0))
+        for text, var in [
+            ("🔊  Sound alerts",         self.sound_var),
+            ("🛡️  Anti-AFK",             self.anti_afk_var),
+        ]:
+            tk.Checkbutton(tog_row1, text=text, variable=var, bg=BG2, fg=TEXT,
+                           selectcolor=BG3, activebackground=BG2,
+                           font=("Segoe UI", 10), cursor="hand2").pack(side="left", padx=(0, 16))
+        for text, var in [
+            ("📱  Mobile push (ntfy)",    self.ntfy_var),
+            ("📸  Save screenshots",      self.screenshot_var),
+        ]:
+            tk.Checkbutton(tog_row2, text=text, variable=var, bg=BG2, fg=TEXT,
+                           selectcolor=BG3, activebackground=BG2,
+                           font=("Segoe UI", 10), cursor="hand2").pack(side="left", padx=(0, 16))
+        tk.Button(sec_tog, text="💾  Save Settings",
+                  bg=GREEN, fg="white", relief="flat",
+                  font=("Segoe UI", 10, "bold"), cursor="hand2", pady=6,
+                  command=self._save_settings).pack(fill="x", pady=(8, 0))
+
+        # ── STATS ROW ─────────────────────────────────────────────────────────
+        stats_frame = tk.Frame(f, bg=BG)
+        stats_frame.pack(fill="x", padx=8, pady=(6, 4))
+        self._big_stat(stats_frame, "🚨", "Alerts", "0", "stat_alerts")
+        self._big_stat(stats_frame, "⏱", "Uptime", "00:00", "stat_uptime")
+        self._big_stat(stats_frame, "🔴", "Pixels", "0", "stat_pixels")
+        self._big_stat(stats_frame, "🕐", "Last", "-", "stat_last")
+
+        # ── COOLDOWN BAR ──────────────────────────────────────────────────────
+        cd_frame = tk.Frame(f, bg=BG2)
+        cd_frame.pack(fill="x", padx=8, pady=4)
         cd_inner = tk.Frame(cd_frame, bg=BG2, pady=4); cd_inner.pack(fill="x", padx=8)
         tk.Label(cd_inner, text="Cooldown", bg=BG2, fg=SUB,
                  font=("Segoe UI", 9)).pack(side="left")
@@ -1026,77 +1054,136 @@ class RaidBotApp:
                                   font=("Segoe UI", 9), width=10)
         self.cd_label.pack(side="left")
 
-        # ══ PREVIEW ═══════════════════════════════════════════════════════════
-        prev_frame = tk.Frame(f, bg=BG2); prev_frame.pack(fill="both", expand=True, padx=8, pady=4)
-        tk.Label(prev_frame, text="📹 LIVE SCAN PREVIEW",
-                 bg=BG2, fg=SUB, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=6, pady=(4,0))
+        # ── PREVIEW ───────────────────────────────────────────────────────────
+        prev_frame = tk.Frame(f, bg=BG2)
+        prev_frame.pack(fill="both", expand=True, padx=8, pady=4)
+        tk.Label(prev_frame, text="📹  Live Scan Preview",
+                 bg=BG2, fg=SUB, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=6, pady=(4, 0))
         self.preview_lbl = tk.Label(prev_frame, bg="#111",
                                     text="No preview yet - start the bot", fg=SUB,
                                     font=("Segoe UI", 10))
         self.preview_lbl.pack(padx=6, pady=(2, 6), fill="both", expand=True)
 
-        # ══ ADVANCED TOGGLE ═══════════════════════════════════════════════════
-        adv_header = tk.Frame(f, bg=BG); adv_header.pack(fill="x", padx=8, pady=(4,0))
-        self._adv_expanded = tk.BooleanVar(value=False)
-        self._adv_toggle_btn = tk.Button(adv_header, text="▸ Show Advanced Options",
+        # ── LOG SECTION (collapsible) ─────────────────────────────────────────
+        log_header = tk.Frame(f, bg=BG); log_header.pack(fill="x", padx=8, pady=(8, 0))
+        self._log_expanded = tk.BooleanVar(value=False)
+        self._log_toggle_btn = tk.Button(log_header, text="▸ Show Log",
                                           bg=BG, fg=SUB, relief="flat",
                                           font=("Segoe UI", 9), cursor="hand2",
-                                          command=self._toggle_advanced)
-        self._adv_toggle_btn.pack(anchor="w")
+                                          command=self._toggle_log_section)
+        self._log_toggle_btn.pack(anchor="w")
+        self._log_container = tk.Frame(f, bg=BG)
+        self.log_box = scrolledtext.ScrolledText(self._log_container, bg="#0a0a0a", fg=TEXT,
+                                                  font=("Consolas", 9),
+                                                  relief="flat", bd=0,
+                                                  state="disabled", height=10,
+                                                  wrap="word")
+        self.log_box.pack(fill="both", expand=True, padx=8, pady=4)
+        for tag, col in [("green", GREEN), ("red", ACCENT), ("yellow", YELLOW),
+                          ("white", TEXT), ("grey", SUB)]:
+            self.log_box.tag_config(tag, foreground=col)
 
-        # Advanced container (hidden by default)
-        self._adv_container = tk.Frame(f, bg=BG)
-        # Detection mode - only one option now (Template + OCR)
-        sec2 = self._section(self._adv_container, "DETECTION MODE")
-        self.mode_var = tk.StringVar(value="template_ocr")
-        tk.Label(sec2, text="Template Match + OCR (only supported mode)",
-                 bg=BG2, fg=GREEN, font=("Segoe UI", 10, "bold")).pack(anchor="w")
-        tk.Label(sec2, text="Scans for the raid banner image, falls back to OCR text detection as backup.",
-                 bg=BG2, fg=SUB, font=("Segoe UI", 9), wraplength=500, justify="left").pack(anchor="w", pady=(2,0))
-        tpl_row = tk.Frame(sec2, bg=BG2); tpl_row.pack(fill="x", pady=(4,0))
-        tpl_exists = os.path.exists(TEMPLATE_FILE)
-        self.tpl_lbl = tk.Label(tpl_row,
-            text=f"{'✓ banner_template.png loaded' if tpl_exists else '✗ banner_template.png not found'}",
-            bg=BG2, fg=GREEN if tpl_exists else ACCENT, font=("Segoe UI", 9))
-        self.tpl_lbl.pack(side="left")
+        # ── HELP SECTION (collapsible) ────────────────────────────────────────
+        help_header = tk.Frame(f, bg=BG); help_header.pack(fill="x", padx=8, pady=(4, 0))
+        self._help_expanded = tk.BooleanVar(value=False)
+        self._help_toggle_btn = tk.Button(help_header, text="▸ Show Help Guide",
+                                           bg=BG, fg=SUB, relief="flat",
+                                           font=("Segoe UI", 9), cursor="hand2",
+                                           command=self._toggle_help_section)
+        self._help_toggle_btn.pack(anchor="w")
+        self._help_container = tk.Frame(f, bg=BG)
+        help_box = scrolledtext.ScrolledText(self._help_container, bg=BG2, fg=TEXT,
+                                              font=("Segoe UI", 10),
+                                              relief="flat", bd=4, wrap="word",
+                                              height=20)
+        help_box.pack(fill="both", expand=True, padx=8, pady=4)
+        help_box.insert("1.0", """
+TYPE://KAISERS RAID UTILITY - GUIDE
+Made by @_KAISUR_ on Discord
+=========================================
 
-        # Window options
-        sec_opts = self._section(self._adv_container, "WINDOW OPTIONS")
-        self.show_all_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(sec_opts, text="Show ALL windows (if Roblox not found)",
-                       variable=self.show_all_var, bg=BG2, fg=YELLOW, selectcolor=BG3,
-                       activebackground=BG2, font=("Segoe UI", 10),
-                       command=self._refresh_windows).pack(anchor="w")
-        self.topmost_var = tk.BooleanVar(value=self.cfg["pin_roblox_topmost"])
-        tk.Checkbutton(sec_opts, text="Pin selected window always-on-top",
-                       variable=self.topmost_var, bg=BG2, fg=TEXT, selectcolor=BG3,
-                       activebackground=BG2, font=("Segoe UI", 10),
-                       command=self._apply_topmost).pack(anchor="w")
+QUICK START
+-----------
+1. Pick your Roblox window from the dropdown
+2. Paste your Discord webhook URL
+3. Click START
 
-        # Scan zone
-        sec_zone = self._section(self._adv_container, "SCAN ZONE")
-        zrow = tk.Frame(sec_zone, bg=BG2); zrow.pack(fill="x", pady=(0,4))
-        self.zone_lbl = tk.Label(zrow, text="Full window (no zone set)",
-                                  bg=BG2, fg=SUB, font=("Segoe UI", 10), anchor="w")
-        self.zone_lbl.pack(side="left", expand=True, fill="x")
-        self._btn(zrow, "Draw Zone", self._pick_zone, ACCENT).pack(side="left", padx=2)
-        self._btn(zrow, "Clear", self._clear_zone, BG3).pack(side="left", padx=2)
-        cal_row = tk.Frame(sec_zone, bg=BG2); cal_row.pack(fill="x")
-        self.cal_btn = self._btn(cal_row, "Auto-Calibrate", self._auto_calibrate, YELLOW)
-        self.cal_btn.pack(side="left")
-        self.cal_lbl = tk.Label(cal_row, text="  Samples baseline red to set optimal threshold",
-                                 bg=BG2, fg=SUB, font=("Segoe UI", 9))
-        self.cal_lbl.pack(side="left", padx=6)
+That is it. The bot does the rest.
 
-    def _toggle_advanced(self):
-        if self._adv_expanded.get():
-            self._adv_container.pack_forget()
-            self._adv_toggle_btn.config(text="▸ Show Advanced Options")
-            self._adv_expanded.set(False)
+
+BUTTONS
+-------
+START - begins watching for raids
+STOP - ends the session, sends a summary to Discord
+PAUSE - temporarily stops detection (use when changing servers)
+PING - manually fires a raid alert right now
+Update Server Link - paste a fresh server join link from your clipboard
+Fire Test Alert - sends a test message to Discord to confirm everything works
+
+
+QUICK SETTINGS
+--------------
+Sound alerts - plays a sound on your PC when a raid is detected
+Anti-AFK - clicks inside Roblox every 5 minutes so your alt doesn't get kicked
+Mobile push - sends a notification to your phone via the ntfy app (free)
+Save screenshots - saves raid screenshots to a folder next to the exe
+
+
+REQUIREMENTS
+------------
+This bot needs to run on a secondary Windows PC or via Remote Desktop (RDP).
+Running it on your main gaming PC will interfere with your mouse.
+
+You also need a Roblox alt account logged in on that secondary machine.
+The alt sits in the gang base server so the bot can watch it for raids.
+Your main account stays free for actual gameplay.
+
+
+COMMON ISSUES
+-------------
+Bot not detecting raids - make sure the Roblox window is selected in the dropdown and banner_template.png is in the same folder as the exe.
+
+False alerts - go to Advanced tab and increase the Template Confidence slider.
+
+Anti-AFK not working - make sure the toggle is on above and the bot is running.
+
+Settings keep resetting - make sure you are not running the exe from inside a zip file.
+
+Mobile notifications not working - install the ntfy app, subscribe to the channel shown in the Advanced tab.
+
+
+CONTACT
+-------
+Discord: @_KAISUR_
+GitHub: https://github.com/typekaiser/kaisers-raid-utility
+""")
+        help_box.config(state="disabled")
+
+        # Spacer at bottom so last element isn't right at the edge
+        tk.Frame(f, bg=BG, height=20).pack()
+
+    def _toggle_log_section(self):
+        if self._log_expanded.get():
+            self._log_container.pack_forget()
+            self._log_toggle_btn.config(text="▸ Show Log")
+            self._log_expanded.set(False)
         else:
-            self._adv_container.pack(fill="both", expand=True, padx=0, pady=0)
-            self._adv_toggle_btn.config(text="▾ Hide Advanced Options")
-            self._adv_expanded.set(True)
+            self._log_container.pack(fill="both", expand=True)
+            self._log_toggle_btn.config(text="▾ Hide Log")
+            self._log_expanded.set(True)
+
+    def _toggle_help_section(self):
+        if self._help_expanded.get():
+            self._help_container.pack_forget()
+            self._help_toggle_btn.config(text="▸ Show Help Guide")
+            self._help_expanded.set(False)
+        else:
+            self._help_container.pack(fill="both", expand=True)
+            self._help_toggle_btn.config(text="▾ Hide Help Guide")
+            self._help_expanded.set(True)
+
+    def _show_help_popup(self):
+        self._toggle_help_section()
 
     def _big_stat(self, parent, icon, label, value, attr):
         """Helper to build a compact stat card."""
@@ -1112,68 +1199,49 @@ class RaidBotApp:
                  font=("Segoe UI", 8)).pack()
         setattr(self, attr, val_lbl)
 
-    # ── SETTINGS TAB ─────────────────────────────────────────────────────────
+    # ── ADVANCED TAB ─────────────────────────────────────────────────────────
 
-    def _tab_settings(self, nb):
-        # Outer frame holds canvas + scrollbar for scrollability
+    def _tab_advanced(self, nb):
         outer = tk.Frame(nb, bg=BG)
-        nb.add(outer, text="  ⚙️ SETTINGS  ")
+        nb.add(outer, text="  🔧 ADVANCED  ")
 
         canvas = tk.Canvas(outer, bg=BG, highlightthickness=0)
         vsb = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=vsb.set)
         vsb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
-
         f = tk.Frame(canvas, bg=BG)
         win_id = canvas.create_window((0, 0), window=f, anchor="nw")
-
-        def _on_frame_configure(e):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-        def _on_canvas_configure(e):
-            canvas.itemconfig(win_id, width=e.width)
+        def _on_frame_configure(e): canvas.configure(scrollregion=canvas.bbox("all"))
+        def _on_canvas_configure(e): canvas.itemconfig(win_id, width=e.width)
         f.bind("<Configure>", _on_frame_configure)
         canvas.bind("<Configure>", _on_canvas_configure)
 
-        # Mousewheel scroll
-        def _on_mousewheel(e):
-            canvas.yview_scroll(int(-1*(e.delta/120)), "units")
-        canvas.bind("<MouseWheel>", _on_mousewheel)
-        # Also bind to the inner frame so scrolling works anywhere inside it
-        f.bind("<MouseWheel>", _on_mousewheel)
+        # ── ALLY WEBHOOKS ─────────────────────────────────────────────────────
+        sec = self._section(f, "📣  Discord - Ally Servers")
+        tk.Label(sec, text="── ALLY #1 (optional) ──",
+                 bg=BG2, fg=YELLOW, font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 2))
+        self._field(sec, "Webhook URL:", "webhook_url_2", width=56)
+        self._field(sec, "Alert Message:", "discord_message_2", width=56)
+        tk.Label(sec, text="Leave the alert message blank to use the same message as primary.",
+                 bg=BG2, fg=SUB, font=("Segoe UI", 8)).pack(anchor="w", pady=(2, 6))
+        tk.Label(sec, text="── ALLY #2 (optional) ──",
+                 bg=BG2, fg=YELLOW, font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 2))
+        self._field(sec, "Webhook URL:", "webhook_url_3", width=56)
+        self._field(sec, "Alert Message:", "discord_message_3", width=56)
+        tk.Label(sec, text="Leave the alert message blank to use the same message as primary.",
+                 bg=BG2, fg=SUB, font=("Segoe UI", 8)).pack(anchor="w", pady=(2, 0))
 
-        # ── DISCORD ───────────────────────────────────────────────────────────
-        sec = self._section(f, "DISCORD  (primary webhook + 2 optional ally slots)")
-        self._field(sec, "Primary Webhook URL:", "webhook_url", width=56)
-        self._field(sec, "Primary Description:", "webhook_desc", width=56)
-        self._field(sec, "Ally Webhook #2 (optional):", "webhook_url_2", width=56)
-        self._field(sec, "Ally #2 Description:", "webhook_desc_2", width=56)
-        self._field(sec, "Ally Webhook #3 (optional):", "webhook_url_3", width=56)
-        self._field(sec, "Ally #3 Description:", "webhook_desc_3", width=56)
-        self._field(sec, "Alert Message:", "discord_message", width=56)
-
-        # Live webhook status indicator
-        wh_row = tk.Frame(sec, bg=BG2); wh_row.pack(fill="x", pady=(4,0))
-        self._wh_status = tk.Label(wh_row, text="● Not tested", bg=BG2, fg=SUB,
-                                   font=("Segoe UI", 9))
-        self._wh_status.pack(side="left")
-        self._btn(wh_row, "Test Webhook", self._test_webhook, "#5865F2").pack(side="left", padx=6)
-        self._btn(wh_row, "📋 Paste URL", self._paste_webhook, BG3).pack(side="left", padx=2)
-        self._btn(wh_row, "⚡ Quick Setup", self._quick_setup, GREEN).pack(side="left", padx=2)
-
-        # ── QUICK JOIN LINK (RoPro / Direct Roblox join) ──────────────────────
-        sec_join = self._section(f, "🎯 QUICK JOIN LINK  (Auto-fetch from Roblox)")
+        # ── QUICK JOIN LINK ───────────────────────────────────────────────────
+        sec_join = self._section(f, "🎯  One-Click Join Link (auto-fetch)")
         self.join_enabled_var = tk.BooleanVar(value=self.cfg.get("join_link_enabled", True))
-        tk.Checkbutton(sec_join, text="Include join link in Discord raid alerts",
+        self.auto_fetch_var = tk.BooleanVar(value=self.cfg.get("auto_fetch_join_link", True))
+        tk.Checkbutton(sec_join, text="Include join link in raid alerts",
                        variable=self.join_enabled_var, bg=BG2, fg=TEXT, selectcolor=BG3,
                        activebackground=BG2, font=("Segoe UI", 10)).pack(anchor="w")
-
-        self.auto_fetch_var = tk.BooleanVar(value=self.cfg.get("auto_fetch_join_link", True))
-        tk.Checkbutton(sec_join, text="🔄 Auto-fetch current server link on every raid (requires cookie below)",
+        tk.Checkbutton(sec_join, text="Auto-fetch current server on every raid (needs cookie below)",
                        variable=self.auto_fetch_var, bg=BG2, fg=GREEN, selectcolor=BG3,
                        activebackground=BG2, font=("Segoe UI", 10)).pack(anchor="w")
-
-        # Roblox user ID (non-sensitive, editable)
         uid_row = tk.Frame(sec_join, bg=BG2); uid_row.pack(fill="x", pady=(6, 0))
         tk.Label(uid_row, text="Roblox User ID:", bg=BG2, fg=TEXT,
                  font=("Segoe UI", 10)).pack(side="left")
@@ -1181,731 +1249,182 @@ class RaidBotApp:
         tk.Entry(uid_row, textvariable=self.roblox_uid_var, bg=BG3, fg=TEXT,
                  insertbackground=TEXT, font=("Consolas", 9), width=18,
                  relief="flat", bd=4).pack(side="left", padx=6)
-        tk.Label(uid_row, text="(your alt's numeric ID from their profile URL)",
+        tk.Label(uid_row, text="(numeric ID from the profile URL)",
                  bg=BG2, fg=SUB, font=("Segoe UI", 8)).pack(side="left", padx=4)
-
-        # Cookie (dev-locked, sensitive)
         ck_row = tk.Frame(sec_join, bg=BG2); ck_row.pack(fill="x", pady=(6, 0))
-        tk.Label(ck_row, text=".ROBLOSECURITY Cookie:", bg=BG2, fg=SUB,
+        tk.Label(ck_row, text="Cookie (dev-locked):", bg=BG2, fg=SUB,
                  font=("Segoe UI", 10)).pack(side="left")
         self.cookie_var = tk.StringVar(value=self.cfg.get("roblox_cookie", ""))
         entry_state_ck = "normal" if getattr(self, "_dev_unlocked", False) else "readonly"
         entry_bg_ck    = BG3 if getattr(self, "_dev_unlocked", False) else BG2
         entry_fg_ck    = TEXT if getattr(self, "_dev_unlocked", False) else SUB
-        self._cookie_entry = tk.Entry(ck_row, textvariable=self.cookie_var, bg=entry_bg_ck, fg=entry_fg_ck,
-                                       insertbackground=TEXT, font=("Consolas", 9), width=40,
+        self._cookie_entry = tk.Entry(ck_row, textvariable=self.cookie_var,
+                                       bg=entry_bg_ck, fg=entry_fg_ck,
+                                       insertbackground=TEXT, font=("Consolas", 9), width=38,
                                        relief="flat", bd=4, show="•",
                                        state=entry_state_ck, readonlybackground=BG2)
         self._cookie_entry.pack(side="left", padx=6, fill="x", expand=True)
-
         ck_btn_row = tk.Frame(sec_join, bg=BG2); ck_btn_row.pack(fill="x", pady=(4, 0))
         self._btn(ck_btn_row, "🧪 Test Fetch", self._test_presence_fetch, GREEN).pack(side="left", padx=2)
         self._btn(ck_btn_row, "❌ Clear Cookie", self._clear_cookie, BG3).pack(side="left", padx=2)
-        tk.Label(ck_btn_row, text="🔒 Cookie field is dev-locked. Hit Unlock below to edit.",
-                 bg=BG2, fg=SUB, font=("Segoe UI", 8)).pack(side="left", padx=4)
-
-        # Manual fallback link
         jl_row = tk.Frame(sec_join, bg=BG2); jl_row.pack(fill="x", pady=(8, 0))
-        tk.Label(jl_row, text="Manual Link (fallback):", bg=BG2, fg=TEXT,
+        tk.Label(jl_row, text="Manual fallback link:", bg=BG2, fg=TEXT,
                  font=("Segoe UI", 9)).pack(side="left")
         self.join_link_var = tk.StringVar(value=self.cfg.get("server_join_link", ""))
         tk.Entry(jl_row, textvariable=self.join_link_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Consolas", 9), width=40,
+                 insertbackground=TEXT, font=("Consolas", 9), width=38,
                  relief="flat", bd=4).pack(side="left", padx=6, fill="x", expand=True)
+        jl_btn_row = tk.Frame(sec_join, bg=BG2); jl_btn_row.pack(fill="x", pady=(4, 0))
+        self._btn(jl_btn_row, "📋 Paste Fallback", self._paste_join_link, "#5865F2").pack(side="left", padx=2)
+        self._btn(jl_btn_row, "❌ Clear", self._clear_join_link, BG3).pack(side="left", padx=2)
 
-        btn_row = tk.Frame(sec_join, bg=BG2); btn_row.pack(fill="x", pady=(4, 0))
-        self._btn(btn_row, "📋 Paste Fallback", self._paste_join_link, "#5865F2").pack(side="left", padx=2)
-        self._btn(btn_row, "❌ Clear", self._clear_join_link, BG3).pack(side="left", padx=2)
-
-        tk.Label(sec_join,
-                 text="How auto-fetch works: Bot queries Roblox using your cookie to find which server your user ID is in, "
-                      "builds the join link, and drops it in every raid alert. Link is always current even if you server hop.\n\n"
-                      "How to get your cookie: 1) Log into your ALT account in a browser  "
-                      "2) Press F12 to open DevTools  3) Application tab → Cookies → roblox.com  "
-                      "4) Copy the Value field of '.ROBLOSECURITY'  5) Unlock dev settings and paste here.\n\n"
-                      "Cookie stays on your PC only. Never uploaded or logged anywhere.",
-                 bg=BG2, fg=SUB, font=("Segoe UI", 8),
-                 wraplength=520, justify="left").pack(anchor="w", pady=(6, 0))
-
-        # ── DETECTION TUNING ──────────────────────────────────────────────────
-        sec2 = self._section(f, "DETECTION TUNING")
-        self._slider(sec2, "Red Pixel Threshold:", "red_threshold", 100, 100000)
+        # ── DETECTION TUNING ─────────────────────────────────────────────────
+        sec2 = self._section(f, "🎯  Detection Tuning")
+        self.mode_var = tk.StringVar(value="template_ocr")
+        self.kw_var = tk.StringVar(value=", ".join(self.cfg.get("raid_text_keywords",
+                                                                  ["INVADED", "RAID", "ATTACK"])))
+        tpl_exists = os.path.exists(TEMPLATE_FILE)
+        self.tpl_lbl = tk.Label(sec2,
+            text=f"{'✓ banner_template.png loaded' if tpl_exists else '✗ banner_template.png not found'}",
+            bg=BG2, fg=GREEN if tpl_exists else ACCENT, font=("Segoe UI", 9))
+        self.tpl_lbl.pack(anchor="w", pady=(0, 4))
         self._slider(sec2, "Template Confidence %:", "template_confidence", 50, 99)
         self._slider(sec2, "Scan Interval (sec):", "scan_interval", 1, 10)
         self._slider(sec2, "Alert Cooldown (sec):", "cooldown", 5, 300)
 
-        # ── TEXT KEYWORDS ─────────────────────────────────────────────────────
-        sec3 = self._section(f, "TEXT KEYWORDS  (comma separated)")
-        self.kw_var = tk.StringVar(value=", ".join(self.cfg["raid_text_keywords"]))
-        tk.Entry(sec3, textvariable=self.kw_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Segoe UI", 10), width=44,
-                 relief="flat", bd=4).pack(anchor="w")
+        # ── WINDOW OPTIONS ────────────────────────────────────────────────────
+        sec_opts = self._section(f, "🪟  Window Options")
+        self.show_all_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(sec_opts, text="Show ALL windows (if Roblox not found)",
+                       variable=self.show_all_var, bg=BG2, fg=YELLOW, selectcolor=BG3,
+                       activebackground=BG2, font=("Segoe UI", 10),
+                       command=self._refresh_windows).pack(anchor="w")
+        self.topmost_var = tk.BooleanVar(value=self.cfg.get("pin_roblox_topmost", True))
+        tk.Checkbutton(sec_opts, text="Pin selected window always-on-top",
+                       variable=self.topmost_var, bg=BG2, fg=TEXT, selectcolor=BG3,
+                       activebackground=BG2, font=("Segoe UI", 10),
+                       command=self._apply_topmost).pack(anchor="w")
 
-        # ── ALERT SOUND ───────────────────────────────────────────────────────
-        sec_snd = self._section(f, "ALERT SOUND")
-        snd_row = tk.Frame(sec_snd, bg=BG2); snd_row.pack(fill="x")
-        tk.Label(snd_row, text="Sound style:", bg=BG2, fg=TEXT, font=("Segoe UI", 10)).pack(side="left")
-        self.sound_style_var = tk.StringVar(value=self.cfg.get("sound_style", "beep"))
-        sound_cb = ttk.Combobox(snd_row, textvariable=self.sound_style_var,
-                                values=["beep", "alarm", "pulse", "none"],
-                                state="readonly", width=10, font=("Segoe UI", 10))
-        sound_cb.pack(side="left", padx=6)
-        self._btn(snd_row, "Preview", self._preview_sound, SUB).pack(side="left")
-
-        # ── OPTIONS ───────────────────────────────────────────────────────────
-        sec4 = self._section(f, "OPTIONS")
-        self.sound_var     = tk.BooleanVar(value=self.cfg["sound_enabled"])
-        self.ss_var        = tk.BooleanVar(value=self.cfg["screenshot_enabled"])
-        self.stop_msg_var  = tk.BooleanVar(value=self.cfg.get("stop_message_enabled", True))
-        self.daily_var     = tk.BooleanVar(value=self.cfg.get("daily_summary_enabled", True))
-        self.flash_var     = tk.BooleanVar(value=self.cfg.get("flash_taskbar", True))
-        self.lb_var        = tk.BooleanVar(value=self.cfg.get("leaderboard_enabled", True))
-        for text, var in [
-            ("Play sound on raid",                self.sound_var),
-            ("Save screenshot on raid",           self.ss_var),
-            ("Send pause message when bot stops", self.stop_msg_var),
-            ("Send daily raid summary at 8am",    self.daily_var),
-            ("Flash taskbar on raid",             self.flash_var),
-            ("Capture leaderboard on raid",       self.lb_var),
-        ]:
-            tk.Checkbutton(sec4, text=text, variable=var,
-                           bg=BG2, fg=TEXT, selectcolor=BG3, activebackground=BG2,
-                           font=("Segoe UI", 10)).pack(anchor="w")
-
-        # ── PAUSE MESSAGE ─────────────────────────────────────────────────────
-        sec_stop = self._section(f, "PAUSE MESSAGE")
-        self._field(sec_stop, "Message when bot stops:", "stop_message", width=56)
-
-        # ── STARTUP ───────────────────────────────────────────────────────────
-        sec5 = self._section(f, "STARTUP")
-        self.auto_start_var = tk.BooleanVar(value=self.cfg.get("auto_start", False))
-        self.min_start_var  = tk.BooleanVar(value=self.cfg.get("minimize_on_start", False))
-        self.tray_var       = tk.BooleanVar(value=self.cfg.get("minimize_to_tray", False))
-        for text, var in [
-            ("Auto-start bot on launch",          self.auto_start_var),
-            ("Minimize bot window when started",  self.min_start_var),
-            ("Minimize to system tray",           self.tray_var),
-        ]:
-            tk.Checkbutton(sec5, text=text, variable=var,
-                           bg=BG2, fg=TEXT, selectcolor=BG3, activebackground=BG2,
-                           font=("Segoe UI", 10)).pack(anchor="w")
-
-        # ── SCHEDULED HOURS ───────────────────────────────────────────────────
-        sec_sched = self._section(f, "SCHEDULED WATCH HOURS  (24h format, e.g. 18-02)")
-        self.sched_var = tk.BooleanVar(value=self.cfg.get("scheduled_enabled", False))
-        tk.Checkbutton(sec_sched, text="Enable scheduled auto-start/stop",
-                       variable=self.sched_var, bg=BG2, fg=TEXT, selectcolor=BG3,
-                       activebackground=BG2, font=("Segoe UI", 10)).pack(anchor="w")
-        sched_row = tk.Frame(sec_sched, bg=BG2); sched_row.pack(fill="x", pady=(4,0))
-        tk.Label(sched_row, text="Start hour:", bg=BG2, fg=TEXT, font=("Segoe UI", 10)).pack(side="left")
-        self.sched_start_var = tk.StringVar(value=str(self.cfg.get("sched_start_hour", 18)))
-        tk.Entry(sched_row, textvariable=self.sched_start_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Segoe UI", 10), width=4,
-                 relief="flat", bd=4).pack(side="left", padx=4)
-        tk.Label(sched_row, text="Stop hour:", bg=BG2, fg=TEXT, font=("Segoe UI", 10)).pack(side="left", padx=(8,0))
-        self.sched_stop_var = tk.StringVar(value=str(self.cfg.get("sched_stop_hour", 2)))
-        tk.Entry(sched_row, textvariable=self.sched_stop_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Segoe UI", 10), width=4,
-                 relief="flat", bd=4).pack(side="left", padx=4)
+        # ── SCAN ZONE ─────────────────────────────────────────────────────────
+        sec_zone = self._section(f, "🔍  Scan Zone")
+        zrow = tk.Frame(sec_zone, bg=BG2); zrow.pack(fill="x", pady=(0, 4))
+        self.zone_lbl = tk.Label(zrow, text="Full window (no zone set)",
+                                  bg=BG2, fg=SUB, font=("Segoe UI", 10), anchor="w")
+        self.zone_lbl.pack(side="left", expand=True, fill="x")
+        self._btn(zrow, "Draw Zone", self._pick_zone, ACCENT).pack(side="left", padx=2)
+        self._btn(zrow, "Clear", self._clear_zone, BG3).pack(side="left", padx=2)
+        cal_row = tk.Frame(sec_zone, bg=BG2); cal_row.pack(fill="x")
+        self.cal_btn = self._btn(cal_row, "Auto-Calibrate", self._auto_calibrate, YELLOW)
+        self.cal_btn.pack(side="left")
+        self.cal_lbl = tk.Label(cal_row, text="  Samples baseline red to set threshold",
+                                 bg=BG2, fg=SUB, font=("Segoe UI", 8))
+        self.cal_lbl.pack(side="left", padx=6)
 
         # ── HOTKEY ────────────────────────────────────────────────────────────
-        sec6 = self._section(f, "HOTKEY  (global - works even in-game)")
-        hk_row = tk.Frame(sec6, bg=BG2); hk_row.pack(fill="x")
+        sec_hk = self._section(f, "⌨️  Hotkey")
+        hk_row = tk.Frame(sec_hk, bg=BG2); hk_row.pack(fill="x")
         tk.Label(hk_row, text="Manual ping key:", bg=BG2, fg=TEXT,
                  font=("Segoe UI", 10)).pack(side="left")
         self.hotkey_var = tk.StringVar(value=self.cfg.get("hotkey", "f8"))
         tk.Entry(hk_row, textvariable=self.hotkey_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Segoe UI", 10), width=10,
+                 insertbackground=TEXT, font=("Segoe UI", 10), width=8,
                  relief="flat", bd=4).pack(side="left", padx=6)
-        tk.Label(hk_row, text="(e.g. f8, ctrl+shift+r)", bg=BG2, fg=SUB,
-                 font=("Segoe UI", 9)).pack(side="left")
+        self._btn(hk_row, "Apply", self._apply_hotkey, ACCENT).pack(side="left")
 
-        sec_afk = self._section(f, "ANTI-AFK")
-        self.anti_afk_var = tk.BooleanVar(value=self.cfg.get("anti_afk_enabled", False))
-        tk.Checkbutton(sec_afk, text="Enable anti-AFK (clicks inside Roblox window periodically)",
+        # ── ANTI-AFK ─────────────────────────────────────────────────────────
+        sec_afk = self._section(f, "🛡️  Anti-AFK")
+        self.anti_afk_var_adv = self.anti_afk_var  # same var as Home tab
+        tk.Checkbutton(sec_afk, text="Enable anti-AFK (clicks Roblox every 5 minutes)",
                        variable=self.anti_afk_var, bg=BG2, fg=TEXT, selectcolor=BG3,
                        activebackground=BG2, font=("Segoe UI", 10)).pack(anchor="w")
-        self._slider(sec_afk, "Click interval (sec):", "anti_afk_interval", 60, 600)
 
-        sec_update = self._section(f, "AUTO-UPDATE  🔒")
+        # ── AUTO-UPDATE ───────────────────────────────────────────────────────
+        sec_update = self._section(f, "🔄  Auto-Update  🔒")
         self.update_check_var = tk.BooleanVar(value=self.cfg.get("update_check_enabled", True))
         tk.Checkbutton(sec_update, text="Check for updates on launch",
                        variable=self.update_check_var, bg=BG2, fg=TEXT, selectcolor=BG3,
                        activebackground=BG2, font=("Segoe UI", 10)).pack(anchor="w")
-        upd_row = tk.Frame(sec_update, bg=BG2); upd_row.pack(fill="x", pady=(4,0))
-        tk.Label(upd_row, text="GitHub repo:", bg=BG2, fg=SUB, font=("Segoe UI", 10)).pack(side="left")
+        upd_row = tk.Frame(sec_update, bg=BG2); upd_row.pack(fill="x", pady=(4, 0))
+        tk.Label(upd_row, text="GitHub repo:", bg=BG2, fg=SUB,
+                 font=("Segoe UI", 10)).pack(side="left")
         self.update_repo_var = tk.StringVar(value=self.cfg.get("update_repo", ""))
-        entry_state = "normal" if self._dev_unlocked else "readonly"
-        entry_bg    = BG3 if self._dev_unlocked else BG2
-        entry_fg    = TEXT if self._dev_unlocked else SUB
-        self._repo_entry = tk.Entry(upd_row, textvariable=self.update_repo_var, bg=entry_bg, fg=entry_fg,
+        entry_state = "normal" if getattr(self, "_dev_unlocked", False) else "readonly"
+        entry_bg    = BG3 if getattr(self, "_dev_unlocked", False) else BG2
+        entry_fg    = TEXT if getattr(self, "_dev_unlocked", False) else SUB
+        self._repo_entry = tk.Entry(upd_row, textvariable=self.update_repo_var,
+                                     bg=entry_bg, fg=entry_fg,
                                      insertbackground=TEXT, font=("Segoe UI", 10), width=30,
                                      relief="flat", bd=4, state=entry_state,
                                      readonlybackground=BG2)
         self._repo_entry.pack(side="left", padx=6)
         self._btn(upd_row, "Check Now", self._check_for_updates, "#5865F2").pack(side="left", padx=2)
-        unlock_row = tk.Frame(sec_update, bg=BG2); unlock_row.pack(fill="x", pady=(4,0))
-        tk.Label(unlock_row, text="🔒 Dev-locked. ", bg=BG2, fg=SUB,
-                 font=("Segoe UI", 8)).pack(side="left")
-        self._btn(unlock_row, "🔓 Unlock", self._unlock_dev_settings, "#5865F2").pack(side="left", padx=2)
+        unlock_row = tk.Frame(sec_update, bg=BG2); unlock_row.pack(fill="x", pady=(4, 0))
+        tk.Label(unlock_row, text="🔒 Dev-locked.",
+                 bg=BG2, fg=SUB, font=("Segoe UI", 8)).pack(side="left")
+        self._btn(unlock_row, "🔓 Unlock", self._unlock_dev_settings, "#5865F2").pack(side="left", padx=6)
 
-        sec_ntfy = self._section(f, "MOBILE PUSH NOTIFICATIONS  🔒")
-        self.ntfy_var = tk.BooleanVar(value=self.cfg.get("ntfy_enabled", False))
+        # ── MOBILE PUSH ───────────────────────────────────────────────────────
+        sec_ntfy = self._section(f, "📱  Mobile Push (ntfy.sh)  🔒")
+        self.ntfy_var_adv = self.ntfy_var  # same var as Home tab
         tk.Checkbutton(sec_ntfy, text="Enable mobile push notifications on raid",
                        variable=self.ntfy_var, bg=BG2, fg=TEXT, selectcolor=BG3,
                        activebackground=BG2, font=("Segoe UI", 10)).pack(anchor="w")
-        ntfy_row = tk.Frame(sec_ntfy, bg=BG2); ntfy_row.pack(fill="x", pady=(4,0))
-        tk.Label(ntfy_row, text="Channel:", bg=BG2, fg=SUB, font=("Segoe UI", 10)).pack(side="left")
+        ntfy_row = tk.Frame(sec_ntfy, bg=BG2); ntfy_row.pack(fill="x", pady=(4, 0))
+        tk.Label(ntfy_row, text="Channel:", bg=BG2, fg=SUB,
+                 font=("Segoe UI", 10)).pack(side="left")
         self.ntfy_channel_var = tk.StringVar(value=self.cfg.get("ntfy_channel", ""))
-        self._ntfy_entry = tk.Entry(ntfy_row, textvariable=self.ntfy_channel_var, bg=entry_bg, fg=entry_fg,
+        self._ntfy_entry = tk.Entry(ntfy_row, textvariable=self.ntfy_channel_var,
+                                     bg=entry_bg, fg=entry_fg,
                                      insertbackground=TEXT, font=("Segoe UI", 10), width=28,
                                      relief="flat", bd=4, state=entry_state,
                                      readonlybackground=BG2)
         self._ntfy_entry.pack(side="left", padx=6)
         self._btn(ntfy_row, "Test", self._test_ntfy, "#5865F2").pack(side="left", padx=2)
-        tk.Label(sec_ntfy, text="🔒 Dev-locked channel. Subscribe to it in the ntfy app to receive raid alerts.",
-                 bg=BG2, fg=SUB, font=("Segoe UI", 8), wraplength=500, justify="left").pack(anchor="w", pady=(4,0))
+        tk.Label(sec_ntfy,
+                 text="🔒 Channel locked. Subscribe to it in the ntfy app to receive raid alerts.",
+                 bg=BG2, fg=SUB, font=("Segoe UI", 8),
+                 wraplength=500, justify="left").pack(anchor="w", pady=(4, 0))
+
+        # ── HISTORY / HEATMAP ─────────────────────────────────────────────────
+        sec_hist = self._section(f, "📋  Raid History")
+        self.history_box = scrolledtext.ScrolledText(sec_hist, bg="#0a0a0a", fg=TEXT,
+                                                      font=("Consolas", 9),
+                                                      relief="flat", bd=0,
+                                                      state="disabled", height=8)
+        self.history_box.pack(fill="both", expand=True, pady=(4, 0))
+        self.heatmap_canvas = tk.Canvas(sec_hist, bg=BG2, height=120,
+                                         highlightthickness=0)
+        self.heatmap_canvas.pack(fill="x", pady=(8, 0))
+        hist_btns = tk.Frame(sec_hist, bg=BG2); hist_btns.pack(fill="x", pady=(4, 0))
+        self._btn(hist_btns, "🔄 Refresh", self._update_history_display, ACCENT).pack(side="left", padx=2)
+        self._btn(hist_btns, "🗑 Clear History", self._clear_history, BG3).pack(side="left", padx=2)
 
         # ── CONFIG PROFILES ───────────────────────────────────────────────────
-        sec_prof = self._section(f, "CONFIG PROFILES")
+        sec_prof = self._section(f, "💾  Config Profiles")
         prof_row = tk.Frame(sec_prof, bg=BG2); prof_row.pack(fill="x")
-        tk.Label(prof_row, text="Profile name:", bg=BG2, fg=TEXT, font=("Segoe UI", 10)).pack(side="left")
+        tk.Label(prof_row, text="Profile name:", bg=BG2, fg=TEXT,
+                 font=("Segoe UI", 10)).pack(side="left")
         self.profile_var = tk.StringVar(value=self.cfg.get("active_profile", "default"))
         tk.Entry(prof_row, textvariable=self.profile_var, bg=BG3, fg=TEXT,
-                 insertbackground=TEXT, font=("Segoe UI", 10), width=14,
+                 insertbackground=TEXT, font=("Segoe UI", 10), width=16,
                  relief="flat", bd=4).pack(side="left", padx=6)
-        self._btn(prof_row, "Save Profile",  self._save_profile,  GREEN).pack(side="left", padx=2)
-        self._btn(prof_row, "Load Profile",  self._load_profile,  "#5865F2").pack(side="left", padx=2)
-        self._btn(prof_row, "Delete Profile", self._delete_profile, ACCENT).pack(side="left", padx=2)
-        self._profile_list_lbl = tk.Label(sec_prof, text=self._get_profile_names(),
-                                           bg=BG2, fg=SUB, font=("Segoe UI", 8))
-        self._profile_list_lbl.pack(anchor="w", pady=(4,0))
+        self._btn(prof_row, "💾 Save", self._save_profile, GREEN).pack(side="left", padx=2)
+        self._btn(prof_row, "📂 Load", self._load_profile, "#5865F2").pack(side="left", padx=2)
+
+        # ── TEST FUNCTIONS ────────────────────────────────────────────────────
+        sec_test = self._section(f, "🧪  Test Functions")
+        test_row = tk.Frame(sec_test, bg=BG2); test_row.pack(fill="x")
+        self._btn(test_row, "🚨 Test Raid Alert", self._test_alert, "#5865F2", 20).pack(side="left", padx=4)
+        self._btn(test_row, "Test Webhook", self._test_webhook, ACCENT).pack(side="left", padx=4)
+
+        # ── SAVE BUTTON ───────────────────────────────────────────────────────
+        tk.Button(f, text="💾  Save All Settings",
+                  bg=GREEN, fg="white", relief="flat",
+                  font=("Segoe UI", 12, "bold"), cursor="hand2", pady=10,
+                  command=self._save_settings).pack(fill="x", padx=8, pady=12)
+
+        tk.Frame(f, bg=BG, height=20).pack()
 
-        # ── BUTTONS ───────────────────────────────────────────────────────────
-        btn_row = tk.Frame(f, bg=BG); btn_row.pack(pady=(6,2))
-        self.save_btn = self._btn(btn_row, "Save Settings", self._save_settings, GREEN)
-        self.save_btn.pack(side="left", padx=4)
-        self._btn(btn_row, "Reset to Defaults", self._reset_defaults, SUB).pack(side="left", padx=4)
-
-        tk.Label(f, text="─── TEST FUNCTIONS ───", bg=BG, fg=SUB,
-                 font=("Segoe UI", 9)).pack(pady=(6,2))
-        test_row = tk.Frame(f, bg=BG); test_row.pack(pady=(0,10))
-        self._btn(test_row, "🚨 Test Raid Alert",
-                  self._test_alert, "#5865F2", 18).pack(side="left", padx=4)
-
-    # ── HISTORY TAB ───────────────────────────────────────────────────────────
-
-    def _tab_history(self, nb):
-        f = tk.Frame(nb, bg=BG)
-        nb.add(f, text="  📋 HISTORY  ")
-
-        top = tk.Frame(f, bg=BG); top.pack(fill="x", padx=8, pady=6)
-        tk.Label(top, text="RAID HISTORY", bg=BG, fg=SUB,
-                 font=("Segoe UI", 9, "bold")).pack(side="left")
-        self._btn(top, "Refresh Heatmap", self._draw_heatmap, "#5865F2").pack(side="right", padx=2)
-        self._btn(top, "Clear History", self._clear_history, BG3).pack(side="right")
-
-        # Heatmap canvas
-        hm_frame = tk.Frame(f, bg=BG2); hm_frame.pack(fill="x", padx=8, pady=(0,6))
-        tk.Label(hm_frame, text="RAID HEATMAP  (days × hours - darker = more raids)",
-                 bg=BG2, fg=SUB, font=("Segoe UI", 8)).pack(anchor="w", padx=4, pady=(2,0))
-        self.heatmap_canvas = tk.Canvas(hm_frame, bg=BG2, height=110, highlightthickness=0)
-        self.heatmap_canvas.pack(fill="x", padx=4, pady=4)
-
-        cols = ("time", "method", "alerts")
-        self.history_tree = ttk.Treeview(f, columns=cols, show="headings", height=14)
-        style = ttk.Style()
-        style.configure("Treeview", background=BG2, fieldbackground=BG2,
-                        foreground=TEXT, font=("Segoe UI", 10))
-        style.configure("Treeview.Heading", background=BG3, foreground=TEXT,
-                        font=("Segoe UI", 10, "bold"))
-        style.map("Treeview", background=[("selected", ACCENT)])
-
-        self.history_tree.heading("time",   text="Time")
-        self.history_tree.heading("method", text="Detection Method")
-        self.history_tree.heading("alerts", text="Alert #")
-        self.history_tree.column("time",   width=180)
-        self.history_tree.column("method", width=300)
-        self.history_tree.column("alerts", width=80)
-
-        sb = ttk.Scrollbar(f, orient="vertical", command=self.history_tree.yview)
-        self.history_tree.configure(yscrollcommand=sb.set)
-        self.history_tree.pack(side="left", fill="both", expand=True, padx=(8,0), pady=4)
-        sb.pack(side="right", fill="y", pady=4, padx=(0,8))
-
-        self._reload_history_ui()
-        self.root.after(200, self._draw_heatmap)
-
-    def _draw_heatmap(self):
-        """Draw a 7-day × 24-hour grid of raid counts from history."""
-        if not hasattr(self, "heatmap_canvas"):
-            return
-        self.heatmap_canvas.delete("all")
-        # Build 7x24 grid: [day_of_week][hour] = count
-        grid = [[0]*24 for _ in range(7)]
-        max_count = 0
-        for entry in self.history:
-            t = entry.get("time", "")
-            try:
-                dt = datetime.datetime.strptime(t, "%Y-%m-%d %H:%M:%S")
-                grid[dt.weekday()][dt.hour] += 1
-                max_count = max(max_count, grid[dt.weekday()][dt.hour])
-            except Exception:
-                continue
-
-        # Draw
-        self.heatmap_canvas.update_idletasks()
-        canvas_w = self.heatmap_canvas.winfo_width()
-        if canvas_w <= 1:
-            canvas_w = 600
-        label_w = 36
-        cell_w = max(6, (canvas_w - label_w - 10) // 24)
-        cell_h = 12
-        days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-
-        # Hour labels on top
-        for h in range(24):
-            if h % 3 == 0:
-                x = label_w + h * cell_w + cell_w // 2
-                self.heatmap_canvas.create_text(x, 6, text=str(h), fill=SUB, font=("Segoe UI", 7))
-
-        # Grid
-        for d in range(7):
-            y = 14 + d * cell_h
-            self.heatmap_canvas.create_text(label_w - 6, y + cell_h // 2,
-                                            text=days[d], fill=SUB,
-                                            font=("Segoe UI", 8), anchor="e")
-            for h in range(24):
-                x = label_w + h * cell_w
-                count = grid[d][h]
-                if max_count > 0 and count > 0:
-                    intensity = count / max_count
-                    # Dark grey → bright red
-                    r = int(40 + intensity * 215)
-                    g = int(40 + intensity * 5)
-                    b = int(40 + intensity * 5)
-                    colour = f"#{r:02x}{g:02x}{b:02x}"
-                else:
-                    colour = "#1a1a1a"
-                self.heatmap_canvas.create_rectangle(x, y, x + cell_w - 1, y + cell_h - 1,
-                                                     fill=colour, outline="")
-
-    # ── LOG TAB ───────────────────────────────────────────────────────────────
-
-    def _tab_log(self, nb):
-        f = tk.Frame(nb, bg=BG)
-        nb.add(f, text="  📜 LOG  ")
-        self.log_box = scrolledtext.ScrolledText(f, bg="#0a0a0a", fg=TEXT,
-                                                  font=("Consolas", 9),
-                                                  relief="flat", bd=0, state="disabled")
-        self.log_box.pack(fill="both", expand=True, padx=4, pady=4)
-        for tag, col in [("green", GREEN), ("red", "#ff6b6b"),
-                          ("yellow", YELLOW), ("white", TEXT), ("grey", SUB)]:
-            self.log_box.tag_config(tag, foreground=col)
-        self._btn(f, "Clear Log", self._clear_log, BG3).pack(pady=4)
-
-    def _show_setup_wizard(self):
-        """3-step setup wizard shown on first launch."""
-        wiz = tk.Toplevel(self.root)
-        wiz.title("Setup Wizard")
-        wiz.geometry("500x360")
-        wiz.configure(bg=BG)
-        wiz.transient(self.root)
-        wiz.grab_set()
-        tk.Label(wiz, text="Welcome to TYPE://KAISERS Raid Utility",
-                 bg=BG, fg=ACCENT, font=("Segoe UI", 13, "bold")).pack(pady=(14,4))
-        tk.Label(wiz, text="Let's get you set up in 3 quick steps.",
-                 bg=BG, fg=SUB, font=("Segoe UI", 10)).pack()
-
-        step_container = tk.Frame(wiz, bg=BG); step_container.pack(fill="both", expand=True, padx=20, pady=14)
-        state = {"step": 0}
-
-        def render():
-            for w in step_container.winfo_children():
-                w.destroy()
-            if state["step"] == 0:
-                tk.Label(step_container, text="STEP 1 - Paste your Discord webhook URL",
-                         bg=BG, fg=TEXT, font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(10,4))
-                tk.Label(step_container, text="In Discord: Server Settings → Integrations → Webhooks → New → Copy URL",
-                         bg=BG, fg=SUB, font=("Segoe UI", 9), wraplength=440, justify="left").pack(anchor="w", pady=(0,8))
-                hook_var = tk.StringVar(value=self.cfg.get("webhook_url", ""))
-                tk.Entry(step_container, textvariable=hook_var, bg=BG3, fg=TEXT,
-                         insertbackground=TEXT, font=("Segoe UI", 10), width=54,
-                         relief="flat", bd=4).pack(pady=4)
-                def paste():
-                    try: hook_var.set(self.root.clipboard_get())
-                    except Exception: pass
-                tk.Button(step_container, text="📋 Paste from Clipboard", command=paste,
-                          bg=BG3, fg=TEXT, relief="flat", font=("Segoe UI", 10)).pack(pady=4)
-                def nxt():
-                    self.cfg["webhook_url"] = hook_var.get().strip()
-                    state["step"] = 1; render()
-                tk.Button(step_container, text="Next →", command=nxt,
-                          bg=ACCENT, fg="white", relief="flat",
-                          font=("Segoe UI", 10, "bold"), width=12).pack(pady=10)
-            elif state["step"] == 1:
-                tk.Label(step_container, text="STEP 2 - Select your Roblox window",
-                         bg=BG, fg=TEXT, font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(10,4))
-                tk.Label(step_container, text="Make sure Roblox is open first. Click Refresh then pick the right one.",
-                         bg=BG, fg=SUB, font=("Segoe UI", 9), wraplength=440, justify="left").pack(anchor="w", pady=(0,8))
-                self._refresh_windows()
-                labels = [f"[{i+1}] {t}" for i, (_, t) in enumerate(self._roblox_windows)]
-                win_var = tk.StringVar()
-                cb = ttk.Combobox(step_container, textvariable=win_var, values=labels,
-                                   state="readonly", width=50, font=("Segoe UI", 10))
-                cb.pack(pady=4)
-                if labels: cb.current(0)
-                def refresh():
-                    self._refresh_windows()
-                    new_labels = [f"[{i+1}] {t}" for i, (_, t) in enumerate(self._roblox_windows)]
-                    cb["values"] = new_labels
-                    if new_labels: cb.current(0)
-                tk.Button(step_container, text="🔄 Refresh", command=refresh,
-                          bg=BG3, fg=TEXT, relief="flat", font=("Segoe UI", 10)).pack(pady=4)
-                def nxt():
-                    idx = cb.current()
-                    if 0 <= idx < len(self._roblox_windows):
-                        self.selected_handle = self._roblox_windows[idx][0]
-                        self.cfg["selected_window_title"] = self._roblox_windows[idx][1]
-                    state["step"] = 2; render()
-                tk.Button(step_container, text="Next →", command=nxt,
-                          bg=ACCENT, fg="white", relief="flat",
-                          font=("Segoe UI", 10, "bold"), width=12).pack(pady=10)
-            else:
-                tk.Label(step_container, text="STEP 3 - You're all set ✅",
-                         bg=BG, fg=GREEN, font=("Segoe UI", 12, "bold")).pack(pady=(20,8))
-                tk.Label(step_container, text="Click FINISH to close this wizard.\nHit START on the MAIN tab whenever you're ready.",
-                         bg=BG, fg=TEXT, font=("Segoe UI", 10), justify="center").pack(pady=(0,12))
-                def finish():
-                    self.cfg["first_launch_done"] = True
-                    save_config(self.cfg)
-                    wiz.destroy()
-                tk.Button(step_container, text="Finish", command=finish,
-                          bg=GREEN, fg="white", relief="flat",
-                          font=("Segoe UI", 10, "bold"), width=14).pack(pady=10)
-        render()
-
-    def _quick_setup(self):
-        """One-click preset optimised for Fistborn."""
-        presets = {
-            "detection_mode": "template_ocr",
-            "template_confidence": 72,
-            "scan_interval": 2,
-            "cooldown": 30,
-            "sound_enabled": True,
-            "screenshot_enabled": True,
-            "leaderboard_enabled": True,
-            "flash_taskbar": True,
-            "sound_style": "alarm",
-            "pin_roblox_topmost": True,
-        }
-        self.cfg.update(presets)
-        save_config(self.cfg)
-        self.log("Quick Setup applied - recommended Fistborn settings loaded.", "green")
-
-    def _clear_cookie(self):
-        """Clear the stored Roblox cookie."""
-        if not getattr(self, "_dev_unlocked", False):
-            self.log("🔒 Dev-locked. Unlock first to modify cookie.", "yellow")
-            return
-        self.cookie_var.set("")
-        self.cfg["roblox_cookie"] = ""
-        save_config(self.cfg)
-        self.log("Cookie cleared. Auto-fetch will now be disabled until cookie is added back.", "yellow")
-
-    def _test_presence_fetch(self):
-        """Test that cookie + user ID can fetch current server."""
-        uid = self.roblox_uid_var.get().strip()
-        cookie = self.cookie_var.get().strip()
-        if not uid:
-            self.log("❌ No user ID set. Fill in the Roblox User ID field.", "red")
-            return
-        if not cookie:
-            self.log("❌ No cookie set. Unlock dev settings and paste the cookie first.", "red")
-            return
-        self.log("🔄 Testing presence fetch...", "white")
-        def _run():
-            result = fetch_roblox_presence(uid, cookie, debug=True)
-            if not result:
-                self.log("❌ Fetch failed completely (no response).", "red")
-                return
-            # Show who the cookie actually belongs to
-            if result.get("auth_user_id"):
-                self.log(f"   Cookie is logged in as user ID: {result['auth_user_id']}",
-                         "green" if str(result['auth_user_id']) == str(uid) else "yellow")
-                if str(result.get('auth_user_id', '')) != str(uid):
-                    self.log(f"   ⚠ WARNING: Cookie owner ({result['auth_user_id']}) != queried user ({uid})",
-                             "yellow")
-                    self.log(f"   Put {result['auth_user_id']} as your Roblox User ID in settings.",
-                             "yellow")
-            # Always show the raw response for debugging
-            if result.get("raw"):
-                self.log(f"   Raw API response: {result['raw']}", "white")
-            if result.get("error"):
-                self.log(f"❌ {result['error']}", "red")
-                if result.get("userPresenceType") is not None:
-                    status_map = {0: "Offline", 1: "Online (website)",
-                                  2: "In-Game", 3: "In-Studio"}
-                    s = status_map.get(result["userPresenceType"], "Unknown")
-                    self.log(f"   Detected status: {s}", "yellow")
-                return
-            self.log(f"✅ SUCCESS - {result.get('link_quality', 'link built')}", "green")
-            self.log(f"   placeId: {result['placeId']}", "green")
-            self.log(f"   gameId:  {result.get('gameId') or '(missing)'}",
-                     "green" if result.get('gameId') else "yellow")
-            self.log(f"   Link:    {result['join_link']}", "green")
-            # Save as manual fallback too
-            self.cfg["server_join_link"] = result["join_link"]
-            self.join_link_var.set(result["join_link"])
-            save_config(self.cfg)
-            self.log("   ✓ Saved as fallback link.", "green")
-        threading.Thread(target=_run, daemon=True).start()
-
-    def _paste_webhook(self):
-        try:
-            text = self.root.clipboard_get().strip()
-            if text:
-                self._fv_webhook_url.set(text)
-                self.log("Webhook URL pasted from clipboard.", "green")
-            else:
-                self.log("Clipboard is empty.", "yellow")
-        except Exception:
-            self.log("Could not read clipboard.", "yellow")
-
-    def _paste_join_link(self):
-        """Grab a join link from the clipboard and save it."""
-        try:
-            text = self.root.clipboard_get().strip()
-            if not text:
-                self.log("Clipboard is empty.", "yellow")
-                return
-            # Basic validation - must look like a Roblox URL or deep link
-            lower = text.lower()
-            if not any(k in lower for k in ("roblox.com", "roblox://", "games/start", "ropro")):
-                self.log(f"That doesn't look like a Roblox join link: {text[:60]}", "yellow")
-                return
-            self.join_link_var.set(text)
-            self.cfg["server_join_link"] = text
-            save_config(self.cfg)
-            self.log(f"✓ Join link updated: {text[:80]}", "green")
-        except Exception as e:
-            self.log(f"Could not read clipboard: {e}", "red")
-
-    def _clear_join_link(self):
-        """Clear the saved join link."""
-        self.join_link_var.set("")
-        self.cfg["server_join_link"] = ""
-        save_config(self.cfg)
-        self.log("Join link cleared. Raid alerts will not include a join button until set again.", "yellow")
-
-    def _quick_update_join_link(self):
-        """Main-tab shortcut - paste clipboard as join link, show toast."""
-        try:
-            text = self.root.clipboard_get().strip()
-            if not text:
-                self.log("Clipboard empty. Copy the join link from your browser first.", "yellow")
-                return
-            lower = text.lower()
-            if not any(k in lower for k in ("roblox.com", "roblox://", "games/start", "ropro")):
-                self.log(f"Clipboard doesn't contain a Roblox link. Got: {text[:60]}", "red")
-                return
-            self.cfg["server_join_link"] = text
-            save_config(self.cfg)
-            if hasattr(self, "join_link_var"):
-                self.join_link_var.set(text)
-            self.log(f"🎯 Join link updated for this server: {text[:80]}", "green")
-        except Exception as e:
-            self.log(f"Could not update join link: {e}", "red")
-
-    def _toggle_streamer_mode(self):
-        """Toggle streamer mode - hides webhook and ntfy channel in UI."""
-        self.cfg["streamer_mode"] = not self.cfg.get("streamer_mode", False)
-        save_config(self.cfg)
-        state = "ON" if self.cfg["streamer_mode"] else "OFF"
-        self.log(f"Streamer mode: {state}. Restart the app for it to take effect on all fields.", "yellow")
-
-    def _send_keepalive(self):
-        """Hourly ntfy ping so your crew knows the bot is still running."""
-        while self.running:
-            for _ in range(3600):
-                if not self.running: return
-                time.sleep(1)
-            if not self.running: return
-            if self.cfg.get("ntfy_enabled") and self.cfg.get("ntfy_channel"):
-                try:
-                    send_ntfy(self.cfg["ntfy_channel"], "✅ Bot Alive",
-                              f"TYPE://KAISERS Raid Utility still running. Raids this session: {self.session_raid_count}",
-                              priority="low")
-                except Exception:
-                    pass
-
-    def _tab_help(self, nb):
-        f = tk.Frame(nb, bg=BG)
-        nb.add(f, text="  ❓ HELP  ")
-        help_box = scrolledtext.ScrolledText(f, bg=BG2, fg=TEXT,
-                                              font=("Segoe UI", 10),
-                                              relief="flat", bd=4, wrap="word")
-        help_box.pack(fill="both", expand=True, padx=6, pady=6)
-        help_box.insert("1.0", """
-TYPE://KAISERS RAID UTILITY - FULL GUIDE
-Made by @_KAISUR_ on Discord. DM if something breaks.
-=========================================================
-
-BEFORE YOU START - REQUIREMENTS
----------------------------------
-This bot is designed to run on a SECONDARY WINDOWS PC or via REMOTE DESKTOP (RDP).
-Running it on your main gaming PC will interfere with your mouse and screen.
-
-What you need:
-  - A secondary Windows PC, laptop, or handheld (like ROG Ally) running 24/7
-  - OR a Remote Desktop connection to a second Windows account on your PC
-  - A Roblox ALT ACCOUNT logged in on that secondary machine
-    (your main account should be free for actual gameplay)
-  - The alt should be in the gang base server at all times while monitoring
-  - Windows 10 or 11 (required for capture to work properly)
-  - A stable internet connection on the monitoring device
-
-Why an alt account?
-  Your main account needs to stay free so you can actually play and defend.
-  The alt sits in the server doing nothing except letting the bot watch for raids.
-  Roblox will AFK-kick after around 20 minutes of inactivity, which is why
-  the Anti-AFK feature exists in Settings.
-
-Why RDP / secondary device?
-  The bot needs Roblox to be visible (not minimised) to capture screenshots.
-  On RDP, the Roblox window can be "minimised" on your main screen but is
-  still fully rendering on the secondary session. This is the only reliable
-  way to monitor without interfering with your main PC.
-
-
-FIRST TIME SETUP
------------------
-1. Download and run FistbornRaidAlarm.exe
-2. The Setup Wizard will guide you through the basics on first launch
-3. Paste your Discord webhook URL when prompted
-4. Select the Roblox window running on your alt account
-5. Click START and you are done
-
-The bot remembers all your settings between sessions.
-You do not need to reconfigure anything after the first setup.
-
-
-MAIN TAB
----------
-The big coloured banner at the top shows bot status at a glance:
-  Green = bot is running and watching
-  Yellow = bot is paused
-  Red/grey = bot is offline
-
-Buttons:
-  START - begins raid detection
-  STOP - ends the session and sends a summary to Discord
-  PAUSE - temporarily freezes detection (use when changing servers)
-  PING NOW - manually fires a raid alert right now
-
-Feeling Stuck button - brings you back to this help guide
-
-
-SETTINGS TAB
--------------
-Webhook URL - your Discord channel webhook (already filled in by default)
-Ally Webhooks - paste webhooks from allied gang servers to alert them too
-Alert Message - the text sent with every raid alert (role pings are included)
-Quick Join Link - paste your server's RoPro join link here to include a
-                  "One-Click Join" button in every raid alert embed
-Anti-AFK - clicks inside Roblox every few minutes to prevent getting kicked
-Mobile Push - sends a notification to your phone via the ntfy app (free)
-Auto-Update - checks for new versions automatically when the bot launches
-
-The GitHub repo and ntfy channel are locked. Click the Unlock button and
-enter the developer password if you need to change them.
-
-
-QUICK JOIN LINK (RoPro Auto-Fetch)
-------------------------------------
-The bot can automatically fetch your alt's current server link on every
-raid alert, so the Discord alert always has a clickable "Join" button
-pointing at the server your bot is actually in.
-
-To enable auto-fetch:
-1. Go to Settings and find the "QUICK JOIN LINK" section
-2. Enter your alt account's Roblox User ID (the number in their profile URL)
-3. Click the Unlock button and enter the dev password (131322)
-4. Get your .ROBLOSECURITY cookie from your browser:
-   - Log into your alt account in Chrome or Firefox
-   - Press F12 to open Developer Tools
-   - Application tab -> Cookies -> roblox.com
-   - Copy the "Value" of the ".ROBLOSECURITY" cookie
-5. Paste the cookie into the dev-locked field
-6. Hit Save Settings then click "Test Fetch" to verify
-7. Tick "Auto-fetch current server link on every raid"
-
-From this point on, every raid alert has the correct server link
-automatically, no matter how many servers you hop through.
-
-The cookie stays 100% on your PC. Never sent to Discord, never logged,
-never uploaded anywhere. It's stored locally in your config.
-
-If you prefer not to use a cookie, leave it blank and paste manual links
-into the "Manual Link (fallback)" field whenever you change servers.
-
-
-HISTORY TAB
-------------
-Every detected raid is logged here with the time and detection method.
-The heatmap at the top shows which days and hours raids happen most often.
-Use this to figure out when your gang needs to be most alert.
-
-
-HOTKEY
--------
-Default is F8. Press it from anywhere, even while in-game, to fire a
-manual raid ping without touching the bot window.
-You can change this in Settings.
-
-
-TEST FUNCTIONS (in Settings tab)
-----------------------------------
-Test Raid Alert - fires a full test alert to Discord without pinging anyone.
-                  Use this to confirm your webhook is working.
-Test Webhook - sends a quick connection test message to your Discord channel.
-
-
-COMMON ISSUES
---------------
-Bot not detecting raids:
-  Make sure the Roblox window is selected in the dropdown on the MAIN tab.
-  Make sure the banner_template.png file is in the same folder as the exe.
-  Try lowering the Template Confidence slider in Settings.
-
-False raid alerts (detecting when there is no raid):
-  Raise the Template Confidence slider in Settings.
-  Draw a tighter Scan Zone around just the raid banner area.
-
-Anti-AFK not working:
-  Make sure "Enable Anti-AFK" is ticked in Settings and the bot is running.
-  The click interval slider controls how often it clicks (default 5 minutes).
-
-Bot resets settings every launch:
-  Make sure the exe is not being run from inside a zip file.
-  Extract it fully before running.
-
-Update popup not appearing:
-  Check your internet connection.
-  Go to Settings and click "Check Now" in the Auto-Update section.
-
-Mobile notifications not working:
-  Install the ntfy app on your phone (iOS and Android, free).
-  Subscribe to the channel shown in Settings under Mobile Push Notifications.
-  Make sure "Enable mobile push notifications" is ticked.
-
-
-CONTACT
---------
-Discord: @_KAISUR_
-GitHub: https://github.com/typekaiser/kaisers-raid-utility
-""")
-        help_box.config(state="disabled")
 
     # ── UI Helpers ────────────────────────────────────────────────────────────
 
@@ -2021,25 +1540,31 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                 pass
 
     def _get_webhooks(self):
-        """Return list of (url, description) tuples for all configured webhooks."""
+        """Return list of (url, description, message) tuples for all configured webhooks."""
         entries = []
-        for key, desc_key, default_desc in [
-            ("webhook_url",   "webhook_desc",   "Primary"),
-            ("webhook_url_2", "webhook_desc_2", "Ally #1"),
-            ("webhook_url_3", "webhook_desc_3", "Ally #2"),
+        default_msg = self.cfg.get("discord_message", "")
+        for key, desc_key, msg_key, default_desc in [
+            ("webhook_url",   "webhook_desc",   "discord_message",   "Primary"),
+            ("webhook_url_2", "webhook_desc_2", "discord_message_2", "Ally #1"),
+            ("webhook_url_3", "webhook_desc_3", "discord_message_3", "Ally #2"),
         ]:
             u = (self.cfg.get(key) or "").strip()
             if u:
                 desc = (self.cfg.get(desc_key) or default_desc).strip() or default_desc
-                entries.append((u, desc))
+                msg = (self.cfg.get(msg_key) or "").strip()
+                if not msg:
+                    msg = default_msg
+                entries.append((u, desc, msg))
         return entries
 
     def _broadcast_discord(self, message=None, screenshot_path=None, embed=None, filename="raid.png"):
-        """Send a Discord message to all configured webhooks."""
+        """Send a Discord message to all configured webhooks.
+        If `message` is None, uses each webhook's own alert message."""
         results = []
-        for url, _ in self._get_webhooks():
+        for url, desc, wh_msg in self._get_webhooks():
+            actual_msg = message if message is not None else wh_msg
             try:
-                results.append(send_discord(url, message, screenshot_path, embed=embed, filename=filename))
+                results.append(send_discord(url, actual_msg, screenshot_path, embed=embed, filename=filename))
             except Exception as e:
                 results.append((False, str(e), None))
         return results
@@ -2258,7 +1783,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
             # Find the help tab index by iterating tab texts
             for i in range(self.nb.index("end")):
                 text = self.nb.tab(i, "text")
-                if "HELP" in text.upper():
+                if "ADVANCED" in text.upper() or "HOME" in text.upper():
                     self.nb.select(i)
                     self.log("Opened Help tab - read through for common questions.", "green")
                     return
@@ -2305,9 +1830,6 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                 self.selected_handle = self._roblox_windows[i][0]
                 self.cfg["selected_window_title"] = self._roblox_windows[i][1]
         compact_combo.bind("<<ComboboxSelected>>", _on_compact_window)
-
-        tk.Label(row1, text="Mode: Template+OCR", bg=BG, fg=GREEN,
-                 font=("Segoe UI", 9)).pack(side="left", padx=(3,0))
 
         # ── Control buttons row ───────────────────────────────────────────────
         row2 = tk.Frame(f, bg=BG); row2.pack(fill="x", padx=8, pady=(4,1))
@@ -2583,7 +2105,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
             if test_join_link and self.cfg.get("join_link_enabled", True):
                 embed["fields"].append({
                     "name": "🎯 One-Click Join (test)",
-                    "value": f"[**→ Join the server**]({test_join_link})",
+                    "value": f"**[→ Click here to join the server]({test_join_link})**",
                     "inline": False,
                 })
 
@@ -2621,10 +2143,9 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
         self.cfg["webhook_url"]           = self._fv_webhook_url.get().strip()
         self.cfg["webhook_url_2"]         = self._fv_webhook_url_2.get().strip()
         self.cfg["webhook_url_3"]         = self._fv_webhook_url_3.get().strip()
-        self.cfg["webhook_desc"]          = self._fv_webhook_desc.get().strip()
-        self.cfg["webhook_desc_2"]        = self._fv_webhook_desc_2.get().strip()
-        self.cfg["webhook_desc_3"]        = self._fv_webhook_desc_3.get().strip()
         self.cfg["discord_message"]       = self._fv_discord_message.get().strip()
+        self.cfg["discord_message_2"]     = self._fv_discord_message_2.get().strip()
+        self.cfg["discord_message_3"]     = self._fv_discord_message_3.get().strip()
         self.cfg["server_join_link"]      = self.join_link_var.get().strip()
         self.cfg["join_link_enabled"]     = self.join_enabled_var.get()
         self.cfg["auto_fetch_join_link"]  = self.auto_fetch_var.get()
@@ -2632,12 +2153,9 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
         if getattr(self, "_dev_unlocked", False):
             self.cfg["roblox_cookie"]     = self.cookie_var.get().strip()
         self.cfg["stop_message"]          = self._fv_stop_message.get().strip()
-        self.cfg["red_threshold"]         = self._sv_red_threshold.get()
-        self.cfg["template_confidence"]   = self._sv_template_confidence.get()
-        self.cfg["scan_interval"]         = self._sv_scan_interval.get()
-        self.cfg["cooldown"]              = self._sv_cooldown.get()
+        # detection tuning sliders removed - stay at defaults
         self.cfg["sound_enabled"]         = self.sound_var.get()
-        self.cfg["screenshot_enabled"]    = self.ss_var.get()
+        self.cfg["screenshot_enabled"]    = self.screenshot_var.get()
         self.cfg["stop_message_enabled"]  = self.stop_msg_var.get()
         self.cfg["daily_summary_enabled"] = self.daily_var.get()
         self.cfg["flash_taskbar"]         = self.flash_var.get()
@@ -2646,23 +2164,17 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
         self.cfg["auto_start"]            = self.auto_start_var.get()
         self.cfg["minimize_on_start"]     = self.min_start_var.get()
         self.cfg["minimize_to_tray"]      = self.tray_var.get()
-        self.cfg["detection_mode"]        = self.mode_var.get()
+        # detection_mode is now always template_ocr
+        self.cfg["detection_mode"]        = "template_ocr"
         self.cfg["hotkey"]                = self.hotkey_var.get().strip().lower()
         self.cfg["anti_afk_enabled"]      = self.anti_afk_var.get()
-        self.cfg["anti_afk_interval"]     = self._sv_anti_afk_interval.get()
+        # anti_afk_interval and scheduled hours stay at defaults
         self.cfg["ntfy_enabled"]          = self.ntfy_var.get()
         self.cfg["update_check_enabled"]  = self.update_check_var.get()
         if self._dev_unlocked:
             self.cfg["update_repo"]       = self.update_repo_var.get().strip()
             self.cfg["ntfy_channel"]      = self.ntfy_channel_var.get().strip()
-        self.cfg["raid_text_keywords"]    = [k.strip() for k in self.kw_var.get().split(",") if k.strip()]
         self.cfg["sound_style"]           = self.sound_style_var.get()
-        self.cfg["scheduled_enabled"]     = self.sched_var.get()
-        try:
-            self.cfg["sched_start_hour"]  = int(self.sched_start_var.get())
-            self.cfg["sched_stop_hour"]   = int(self.sched_stop_var.get())
-        except ValueError:
-            pass
         save_config(self.cfg)
         self._register_hotkey()
         self.log("Settings saved.", "green")
@@ -3115,14 +2627,23 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                     except Exception as e:
                         self.log(f"   ⚠ Auto-fetch error: {e}, using fallback link", "yellow")
             if join_link and self.cfg.get("join_link_enabled", True):
+                # Extract placeId and gameInstanceId from the https URL so we can
+                # also provide a raw roblox:// link for users whose browser doesn't
+                # handle the web redirect
+                import re as _re
+                pid_m = _re.search(r'placeId=(\d+)', join_link)
+                gid_m = _re.search(r'gameInstanceId=([a-f0-9\-]+)', join_link)
+                raw_proto = ""
+                if pid_m and gid_m:
+                    raw_proto = f"\n`roblox://placeId={pid_m.group(1)}&gameInstanceId={gid_m.group(1)}`"
                 embed["fields"].append({
                     "name": "🎯 One-Click Join",
-                    "value": f"[**→ Join the server instantly**]({join_link})",
+                    "value": f"**[→ Click here to join the server]({join_link})**",
                     "inline": False,
                 })
             sent = 0
-            for url, desc in webhooks:
-                ok, info, msg_id = send_discord(url, self.cfg["discord_message"], screenshot_path, embed=embed)
+            for url, desc, wh_msg in webhooks:
+                ok, info, msg_id = send_discord(url, wh_msg, screenshot_path, embed=embed)
                 if ok:
                     sent += 1
                     self.log(f"  → sent to {desc}", "green")
@@ -3153,7 +2674,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                         "footer": {"text": f"TYPE://KAISERS Raid Utility v{APP_VERSION}"},
                         "timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
                     }
-                    for url, desc in webhooks:
+                    for url, desc, _ in webhooks:
                         ok2, info2, msg_id2 = send_discord(url, None, lb_path, embed=lb_embed, filename="leaderboard.png")
                         if msg_id2:
                             self._session_message_ids.append(msg_id2)
