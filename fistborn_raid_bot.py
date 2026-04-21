@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.3.5"
+APP_VERSION = "1.3.6"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -119,7 +119,7 @@ DEFAULT_CONFIG = {
     "discord_message": "<@&870791568200704030> <@&870791620910538783> <@&1454940232712454297> RAID DETECTED! Join the server in the screenshot below or click the link below: https://www.roblox.com/users/9405149316/profile",
     "discord_message_2": "",
     "discord_message_3": "",
-    "server_join_link": "",
+    "server_join_link": "https://www.roblox.com/users/9405149316/profile",
     "join_link_enabled": True,
     "roblox_cookie": "",
     "roblox_user_id": "9405149316",
@@ -2315,8 +2315,8 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                     self.log("   ⚠ Auto-fetch skipped: cookie or user ID missing", "yellow")
             if test_join_link and self.cfg.get("join_link_enabled", True):
                 embed["fields"].append({
-                    "name": "🎯 One-Click Join (test)",
-                    "value": f"**[→ Click here to join the server]({test_join_link})**",
+                    "name": "🎯 Join the Server (test)",
+                    "value": f"[**→ Click here to join via ALERT's profile**]({test_join_link})\nClick Join on their profile page to get into the same server.",
                     "inline": False,
                 })
 
@@ -2842,14 +2842,9 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                 # also provide a raw roblox:// link for users whose browser doesn't
                 # handle the web redirect
                 import re as _re
-                pid_m = _re.search(r'placeId=(\d+)', join_link)
-                gid_m = _re.search(r'gameInstanceId=([a-f0-9\-]+)', join_link)
-                raw_proto = ""
-                if pid_m and gid_m:
-                    raw_proto = f"\n`roblox://placeId={pid_m.group(1)}&gameInstanceId={gid_m.group(1)}`"
                 embed["fields"].append({
-                    "name": "🎯 One-Click Join",
-                    "value": f"**[→ Click here to join the server]({join_link})**",
+                    "name": "🎯 Join the Server",
+                    "value": f"[**→ Click here to join via ALERT's profile**]({join_link})\nClick Join on their profile page to get into the same server.",
                     "inline": False,
                 })
             sent = 0
