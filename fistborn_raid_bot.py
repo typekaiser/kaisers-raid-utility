@@ -1679,12 +1679,16 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
 
         btn_row = tk.Frame(top, bg=BG); btn_row.pack(pady=10)
         def open_download():
-            if download_url:
-                try:
-                    import webbrowser
+            try:
+                import webbrowser
+                if download_url:
                     webbrowser.open(download_url)
-                except Exception:
-                    pass
+                else:
+                    # No direct exe URL - open the releases page as fallback
+                    repo = (self.cfg.get("update_repo") or "typekaiser/kaisers-raid-utility").strip()
+                    webbrowser.open(f"https://github.com/{repo}/releases/latest")
+            except Exception as e:
+                self.log(f"Could not open download link: {e}", "red")
             top.destroy()
         def skip():
             self.cfg["skipped_version"] = new_ver
