@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.4.2"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -1125,13 +1125,14 @@ class RaidBotApp:
 
         # ── LOG SECTION (collapsible) ─────────────────────────────────────────
         log_header = tk.Frame(f, bg=BG); log_header.pack(fill="x", padx=8, pady=(8, 0))
-        self._log_expanded = tk.BooleanVar(value=False)
-        self._log_toggle_btn = tk.Button(log_header, text="▸ Show Log",
+        self._log_expanded = tk.BooleanVar(value=True)
+        self._log_toggle_btn = tk.Button(log_header, text="▾ Hide Log",
                                           bg=BG, fg=SUB, relief="flat",
                                           font=("Segoe UI", 9), cursor="hand2",
                                           command=self._toggle_log_section)
         self._log_toggle_btn.pack(anchor="w")
         self._log_container = tk.Frame(f, bg=BG)
+        self._log_container.pack(fill="both", expand=True)  # visible by default
         self.log_box = scrolledtext.ScrolledText(self._log_container, bg="#0a0a0a", fg=TEXT,
                                                   font=("Consolas", 9),
                                                   relief="flat", bd=0,
@@ -1505,9 +1506,9 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
     def _test_webhook(self):
         webhook = self._fv_webhook_url.get().strip()
         if not webhook:
-            self._wh_status.config(text="● No URL set", fg=ACCENT)
+            self.log("No webhook URL set.", "red"); return
             return
-        self._wh_status.config(text="● Testing...", fg=YELLOW)
+        self.log("Testing webhook...", "yellow")
         def _check():
             embed = {
                 "title": "✅  Webhook Connected",
@@ -1517,13 +1518,11 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                 "timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
             }
             ok, info, _ = send_discord(webhook, None, embed=embed)
-            self.root.after(0, lambda: self._wh_status.config(
-                text=f"● {'Connected' if ok else 'Failed: ' + info}",
-                fg=GREEN if ok else ACCENT))
+            self.root.after(0, lambda: self.log(f"Webhook: {'Connected' if ok else 'FAILED: ' + info}", "green" if ok else "red"))
         threading.Thread(target=_check, daemon=True).start()
 
     def _preview_sound(self):
-        threading.Thread(target=lambda: play_sound(self.sound_style_var.get()), daemon=True).start()
+        threading.Thread(target=lambda: play_sound("default"), daemon=True).start()
 
     def _get_profile_names(self):
         profiles_dir = os.path.join(_BASE, "profiles")
@@ -1543,7 +1542,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
         with open(path, "w") as pf:
             json.dump(self.cfg, pf, indent=2)
         self.log(f"Profile '{name}' saved.", "green")
-        self._profile_list_lbl.config(text=self._get_profile_names())
+        self.log(f"Saved profiles: {self._get_profile_names()}", "green")
 
     def _load_profile(self):
         name = self.profile_var.get().strip()
@@ -1566,7 +1565,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
         if os.path.exists(path):
             os.remove(path)
             self.log(f"Profile '{name}' deleted.", "yellow")
-            self._profile_list_lbl.config(text=self._get_profile_names())
+            self.log(f"Saved profiles: {self._get_profile_names()}", "green")
         else:
             self.log(f"Profile '{name}' not found.", "red")
 
@@ -2553,46 +2552,42 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
         threading.Thread(target=_fire, daemon=True).start()
 
     def _save_settings(self):
+        # Webhook + messages
         self.cfg["webhook_url"]           = self._fv_webhook_url.get().strip()
         self.cfg["webhook_url_2"]         = self._fv_webhook_url_2.get().strip()
         self.cfg["webhook_url_3"]         = self._fv_webhook_url_3.get().strip()
         self.cfg["discord_message"]       = self._fv_discord_message.get().strip()
         self.cfg["discord_message_2"]     = self._fv_discord_message_2.get().strip()
         self.cfg["discord_message_3"]     = self._fv_discord_message_3.get().strip()
+        # Join link
         self.cfg["server_join_link"]      = self.join_link_var.get().strip()
         self.cfg["join_link_enabled"]     = self.join_enabled_var.get()
         self.cfg["auto_fetch_join_link"]  = self.auto_fetch_var.get()
         self.cfg["roblox_user_id"]        = self.roblox_uid_var.get().strip()
         if getattr(self, "_dev_unlocked", False):
             self.cfg["roblox_cookie"]     = self.cookie_var.get().strip()
-        self.cfg["stop_message"]          = self._fv_stop_message.get().strip()
-        # detection tuning sliders removed - stay at defaults
+        # Home toggles
         self.cfg["sound_enabled"]         = self.sound_var.get()
         self.cfg["screenshot_enabled"]    = self.screenshot_var.get()
-        self.cfg["stop_message_enabled"]  = self.stop_msg_var.get()
-        self.cfg["daily_summary_enabled"] = self.daily_var.get()
-        self.cfg["flash_taskbar"]         = self.flash_var.get()
-        self.cfg["leaderboard_enabled"]   = self.lb_var.get()
-        self.cfg["pin_roblox_topmost"]    = self.topmost_var.get()
-        self.cfg["auto_start"]            = self.auto_start_var.get()
-        self.cfg["minimize_on_start"]     = self.min_start_var.get()
-        self.cfg["minimize_to_tray"]      = self.tray_var.get()
-        # detection_mode is now always template_ocr
-        self.cfg["detection_mode"]        = "template_ocr"
-        self.cfg["hotkey"]                = self.hotkey_var.get().strip().lower()
         self.cfg["anti_afk_enabled"]      = self.anti_afk_var.get()
-        # anti_afk_interval and scheduled hours stay at defaults
         self.cfg["ntfy_enabled"]          = self.ntfy_var.get()
+        # Detection (always template_ocr)
+        self.cfg["detection_mode"]        = "template_ocr"
+        # Advanced
+        self.cfg["pin_roblox_topmost"]    = self.topmost_var.get()
+        self.cfg["hotkey"]                = self.hotkey_var.get().strip().lower()
         self.cfg["update_check_enabled"]  = self.update_check_var.get()
+        # Detection sliders
+        self.cfg["template_confidence"]   = self._sv_template_confidence.get()
+        self.cfg["scan_interval"]         = self._sv_scan_interval.get()
+        self.cfg["cooldown"]              = self._sv_cooldown.get()
+        # Dev-locked fields
         if self._dev_unlocked:
             self.cfg["update_repo"]       = self.update_repo_var.get().strip()
             self.cfg["ntfy_channel"]      = self.ntfy_channel_var.get().strip()
-        self.cfg["sound_style"]           = self.sound_style_var.get()
         save_config(self.cfg)
         self._register_hotkey()
         self.log("Settings saved.", "green")
-        self.save_btn.config(text="Saved!")
-        self.root.after(1500, lambda: self.save_btn.config(text="Save Settings"))
 
     def _pick_zone(self):
         self.log("Draw a box over the raid banner area. ESC to cancel.", "yellow")
@@ -2645,7 +2640,7 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
                 peak = max(samples)
                 suggested = max(int(peak * 3), 500)
                 # Update the slider
-                self.root.after(0, lambda: self._sv_red_threshold.set(suggested))
+                # red threshold slider removed from UI
                 self.root.after(0, lambda: self.log(
                     f"Calibration done. Peak baseline: {peak}px → Threshold set to {suggested}", "green"))
                 self.root.after(0, lambda: self.cal_lbl.config(
@@ -2685,18 +2680,19 @@ GitHub: https://github.com/typekaiser/kaisers-raid-utility
 
     def _start(self):
         if not CAPTURE_AVAILABLE:
-            self.log("❌ Missing capture libraries (numpy/opencv/mss). Reinstall or rebuild exe.", "red")
-            # Show a popup so it's impossible to miss
+            self.log("❌ Cannot start: missing libraries (numpy/opencv/mss)", "red")
+            self.watch_lbl.config(text="❌ Missing libraries", fg=ACCENT)
             import tkinter.messagebox as mb
-            mb.showerror("Cannot Start", 
+            mb.showerror("Cannot Start",
                          "Required libraries are missing:\n\nnumpy, opencv-python, mss\n\n"
                          "If running as exe: rebuild with PyInstaller.\n"
-                         "If running as script: run: pip install numpy opencv-python mss")
+                         "If running as script: pip install numpy opencv-python mss")
             return
         if not self.selected_handle and not self.cfg.get("scan_zone"):
-            self.log("❌ No Roblox window selected. Pick one from the dropdown on the HOME tab.", "red")
+            self.log("❌ Cannot start: no Roblox window selected", "red")
+            self.watch_lbl.config(text="❌ No window selected", fg=ACCENT)
             import tkinter.messagebox as mb
-            mb.showerror("Cannot Start", 
+            mb.showerror("Cannot Start",
                          "No Roblox window selected.\n\n"
                          "Pick your Roblox window from the dropdown on the HOME tab, then try again.")
             return
