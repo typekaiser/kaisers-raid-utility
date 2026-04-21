@@ -70,7 +70,7 @@ except Exception:
 import sys as _sys
 # Hard-coded version constant. This is the source of truth, NOT the config file.
 # Config versions can be stale after updates, so we always check code version.
-APP_VERSION = "1.3.8"
+APP_VERSION = "1.3.9"
 # Config and data MUST persist across exe locations. Use %APPDATA% on Windows
 # so if the user downloads a new exe to Downloads or wherever, it still finds
 # the config from the old one. The exe itself can live anywhere.
@@ -796,8 +796,67 @@ class RaidBotApp:
 
     # ── Startup ───────────────────────────────────────────────────────────────
 
+    def _show_setup_wizard(self):
+        """First launch setup wizard - walks user through webhook and window setup."""
+        if not self.cfg.get("first_launch_done"):
+            # Mark as done so wizard doesn't show again
+            self.cfg["first_launch_done"] = True
+            save_config(self.cfg)
+
+        wizard = tk.Toplevel(self.root)
+        wizard.title("Welcome - Quick Setup")
+        wizard.geometry("480x360")
+        wizard.configure(bg=BG)
+        wizard.transient(self.root)
+        wizard.grab_set()
+        wizard.resizable(False, False)
+
+        # Centre
+        wizard.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 240
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - 180
+        wizard.geometry(f"+{x}+{y}")
+
+        tk.Label(wizard, text="👋  Welcome to Kaisers Raid Utility",
+                 bg=BG, fg=ACCENT, font=("Segoe UI", 13, "bold")).pack(pady=(18, 4))
+        tk.Label(wizard, text="Let's get you set up in 2 steps.",
+                 bg=BG, fg=SUB, font=("Segoe UI", 10)).pack()
+
+        # Step 1 - Webhook
+        s1 = tk.Frame(wizard, bg=BG2); s1.pack(fill="x", padx=20, pady=(14, 0))
+        tk.Label(s1, text="Step 1 - Paste your Discord webhook URL:",
+                 bg=BG2, fg=TEXT, font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=8, pady=(8, 4))
+        wh_var = tk.StringVar(value=self.cfg.get("webhook_url", ""))
+        wh_entry = tk.Entry(s1, textvariable=wh_var, bg=BG3, fg=TEXT,
+                            insertbackground=TEXT, font=("Segoe UI", 10),
+                            width=50, relief="flat", bd=4)
+        wh_entry.pack(padx=8, pady=(0, 8), fill="x")
+
+        # Step 2 - Info
+        s2 = tk.Frame(wizard, bg=BG2); s2.pack(fill="x", padx=20, pady=(8, 0))
+        tk.Label(s2,
+                 text="Step 2 - Pick your Roblox window from the HOME tab dropdown, then click START.",
+                 bg=BG2, fg=TEXT, font=("Segoe UI", 10, "bold"),
+                 wraplength=400, justify="left").pack(anchor="w", padx=8, pady=8)
+
+        def _finish():
+            url = wh_var.get().strip()
+            if url:
+                self.cfg["webhook_url"] = url
+                if hasattr(self, "_fv_webhook_url"):
+                    self._fv_webhook_url.set(url)
+                save_config(self.cfg)
+                self.log(f"Webhook saved from setup wizard.", "green")
+            wizard.destroy()
+
+        tk.Button(wizard, text="✓  Let's Go!",
+                  command=_finish,
+                  bg=GREEN, fg="white", relief="flat",
+                  font=("Segoe UI", 12, "bold"),
+                  pady=8, cursor="hand2").pack(fill="x", padx=20, pady=16)
+
     def _startup_log(self):
-        self.log("TYPE://KAISERS RAID UTILITY V1 ALPHA ready", "green")
+        self.log(f"TYPE://KAISERS RAID UTILITY v{APP_VERSION} ready", "green")
         if WIN32_AVAILABLE:
             self.log("win32gui: OK", "green")
         else:
@@ -3044,6 +3103,21 @@ del "%~f0"
                           "🚨 Gang Base Raided",
                           f"Raid #{self.session_raid_count} detected - {reason}")
             threading.Thread(target=_push, daemon=True).start()
+
+    def _send_keepalive(self):
+        """Periodic ntfy keepalive ping so you know the bot is still alive."""
+        interval = 3600  # ping every hour
+        while self.running:
+            time.sleep(interval)
+            if not self.running:
+                break
+            try:
+                channel = self.cfg.get("ntfy_channel", "").strip()
+                if channel and self.cfg.get("ntfy_enabled", False):
+                    send_ntfy(channel, "✅ Raid Bot Alive",
+                              f"Bot has been running for {int((time.time()-self.start_time)//3600)}h. No issues.")
+            except Exception:
+                pass
 
     def _heartbeat_loop(self):
         """Send a status message to Discord immediately, then every 15 minutes."""
